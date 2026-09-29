@@ -4,10 +4,9 @@ import { useRef, useState } from "react";
 
 interface Props {
   onFiles: (files: File[]) => void;
-  disabled?: boolean;
 }
 
-export default function UploadZone({ onFiles, disabled }: Props) {
+export default function UploadZone({ onFiles }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
 
@@ -24,11 +23,15 @@ export default function UploadZone({ onFiles, disabled }: Props) {
       onClick={() => input.current?.click()}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") input.current?.click(); }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          input.current?.click();
+        }
+      }}
     >
       <input
         ref={input} type="file" accept="application/pdf,.pdf" multiple hidden
-        disabled={disabled}
         onChange={(e) => { pick(e.target.files); e.target.value = ""; }}
       />
       <strong>Arraste os mini CVs em PDF aqui</strong>

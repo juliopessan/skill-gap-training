@@ -156,3 +156,11 @@ def test_same_pdf_twice_in_one_request_is_one_candidate(setup):
     assert len(items) == 2 and items[0]["id"] == items[1]["id"]
     assert len(client.get("/candidates").json()) == 1
     assert len(extractor.calls) == 1
+
+
+def test_candidate_json_exposes_evidence_verified_on_skills(setup):
+    client, _ = setup
+    [item] = upload(client, ("maria.pdf", CV)).json()
+    card = client.get(f"/candidates/{item['id']}").json()
+    assert card["skills"]
+    assert all("evidence_verified" in s and isinstance(s["evidence_verified"], bool) for s in card["skills"])

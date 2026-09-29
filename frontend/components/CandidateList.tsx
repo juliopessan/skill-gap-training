@@ -17,22 +17,28 @@ interface Props {
 }
 
 export default function CandidateList({ candidates, selectedId, onSelect }: Props) {
-  if (candidates.length === 0) return <p className="muted">Nenhum CV processado ainda.</p>;
   return (
-    <ul className="list">
-      {candidates.map((c) => (
-        <li key={c.id}>
-          <button
-            className={`list__item ${c.id === selectedId ? "list__item--active" : ""}`}
-            onClick={() => onSelect(c.id)}
-          >
-            <span className="list__name">{c.candidate || "Sem nome"}</span>
-            <span className={`badge badge--${c.status}`}>
-              {c.status === "processing" ? STAGES[c.stage] ?? c.stage : STAGES[c.status]}
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
+    <div aria-live="polite">
+      {candidates.length === 0 ? (
+        <p className="caption">Nenhum CV processado ainda.</p>
+      ) : (
+        <ul className="list">
+          {candidates.map((c) => (
+            <li key={c.id}>
+              <button
+                className={`list__item ${c.id === selectedId ? "list__item--active" : ""}`}
+                aria-current={c.id === selectedId ? "true" : undefined}
+                onClick={() => onSelect(c.id)}
+              >
+                <span className="list__name">{c.candidate || "Sem nome"}</span>
+                <span className="status">
+                  {(c.status === "processing" ? STAGES[c.stage] ?? c.stage : STAGES[c.status] ?? c.status).toUpperCase()}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

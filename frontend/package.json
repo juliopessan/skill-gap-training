@@ -6,7 +6,8 @@
     "build": "next build",
     "start": "next start -p 3000",
     "typecheck": "tsc --noEmit",
-    "check:http": "node lib/http.check.mjs"
+    "check:http": "node lib/http.check.mjs",
+    "check:ledger": "node lib/ledger.check.mjs"
   },
   "dependencies": {
     "next": "^15.0.0",

@@ -60,19 +60,27 @@ export default function Home() {
 
   return (
     <main className="page">
-      <h1>Skill Gap Training</h1>
-      <p className="muted">
-        Suba o mini CV e o pipeline faz o resto: extrai skills, calcula os gaps do FY27
-        (Azure AI Foundry, Microsoft Fabric e Databricks) e recomenda treinamentos.
-      </p>
+      <div className="intro">
+        <h1>Skill Gap Training</h1>
+        <p className="lede">
+          Suba o mini CV e o pipeline faz o resto: extrai skills, calcula os gaps do FY27
+          (Azure AI Foundry, Microsoft Fabric e Databricks) e recomenda treinamentos.
+        </p>
+      </div>
       <UploadZone onFiles={onFiles} />
       {uploadError && (
-        <p className="error" role="alert">
-          {uploadError}{" "}
+        <div className="notice" role="alert">
+          <span className="notice-k">Falha</span>
+          <p>{uploadError}</p>
           <button type="button" className="button" onClick={() => setUploadError(null)}>Fechar</button>
-        </p>
+        </div>
       )}
-      {apiError && <p className="error" role="alert">{apiError}</p>}
+      {apiError && (
+        <div className="notice" role="alert">
+          <span className="notice-k">Falha</span>
+          <p>{apiError}</p>
+        </div>
+      )}
       <div className="layout">
         <aside>
           <CandidateList candidates={candidates} selectedId={selectedId} onSelect={setSelectedId} />
@@ -81,7 +89,7 @@ export default function Home() {
           {selected ? (
             <CandidateCard candidate={selected} tracks={tracks} />
           ) : (
-            <p className="muted">Selecione um candidato para ver o cartão.</p>
+            <p className="caption">Selecione um candidato para ver o cartão.</p>
           )}
         </div>
       </div>

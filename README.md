@@ -40,6 +40,30 @@ PDF → texto (nativo/OCR) → remoção de contatos → Claude (skills + nível
 - **Cache:** o mesmo PDF (SHA-256) não é processado duas vezes.
 - **Limites:** 10 MB por PDF e até 20 arquivos por envio.
 
+### Medido × afirmado (design Ledger)
+
+A interface segue o design system **Ledger**: o que foi *calculado* nunca se parece com o que foi
+*afirmado pelo modelo*.
+
+| | Origem | Na interface |
+|---|---|---|
+| Nível de cada skill, citação, nome do candidato | **Afirmado** pelo modelo | Nunca fica verde |
+| A citação existe no texto do CV (`evidence_verified`) | **Calculado** (busca de texto, sem LLM) | Selo verde `✓ citação no CV`; se não existe, selo terracota e faixa "Citação não encontrada" |
+| Casamento de nomes com a taxonomia | **Calculado** | Entra no bloco "Calculado, não estimado" |
+| Gaps e ranking dos treinamentos | Contas calculadas, **mas a partir dos níveis inferidos** | Não recebem selo de "medido" |
+| Trilha sem dados | Fato conhecido | Faixa "Sem dados", sem lista de gaps |
+
+- O **ledger** no topo do cartão mostra as barras pareadas "citações do modelo" × "citações
+  localizadas no CV" e os números do candidato. Registros processados antes da verificação não
+  mostram selo nenhum (o campo é `null`, nunca `false`).
+- O verde e o terracota são **reservados** a esses sinais; severidade dos gaps é só rótulo em tinta.
+- **O selo verde prova que a citação existe no texto do CV, não que ela sustenta aquela skill ou
+  aquele nível.** Um modelo pode citar uma linha verdadeira e irrelevante: revise as citações.
+- A busca (`backend/src/skillgap/evidence.py`) normaliza caixa, espaços, hífens e aspas, exige
+  fronteira de palavra/número (`"of 5"` não casa com `"of 50"`) e ignora trechos com menos de 8
+  caracteres; reticências (`…`/`...`) separam trechos que precisam aparecer em ordem.
+- Suporta tema claro e escuro (`prefers-color-scheme`); as cores de texto pequeno passam de 4,5:1.
+
 ## Requisitos
 
 - Python 3.11+, Node 20+
@@ -74,7 +98,9 @@ cd frontend && cp .env.example .env.local && npm install && npm run dev
 
 Sem API key, para ver a interface: `python -m skillgap.demo` (a partir de `backend/`). Ele sobe a API
 em `127.0.0.1:8000` com um extrator **simulado**, que devolve sempre o mesmo perfil fictício
-independentemente do PDF enviado.
+independentemente do PDF enviado. As citações das três primeiras skills vêm de trechos reais do texto
+do PDF (é preciso um PDF com pelo menos 3 linhas de 8+ caracteres), e a última (Kubernetes) é inventada de
+propósito, para você ver o selo e a faixa de "citação não encontrada".
 
 Em lote, sem interface (a partir de `backend/`):
 
@@ -132,9 +158,15 @@ processar com um serviço externo de LLM.
 ## Testes
 
 ```bash
-(cd backend && pytest -q)                 # 177 testes; também passa com `pytest -W error -q`
-(cd frontend && npx tsc --noEmit && npm run build && npm run check:http)
+(cd backend && pytest -q)                 # 215 testes; também passa com `pytest -W error -q`
+(cd frontend && npx tsc --noEmit && npm run check:http && npm run check:ledger && npm run build)
 ```
+
+> Não rode `npm run build` com o `npm run dev` ativo: os dois usam a pasta `.next` e o servidor de
+> desenvolvimento quebra (`Cannot find module './851.js'`). Pare o servidor, faça o build e suba de novo.
+
+`npm run check:ledger` confere a lógica pura dos números do ledger (`frontend/lib/ledger.ts`): contagens,
+horas, citações sem verificação e o percentual das barras.
 
 `npm run check:http` roda, com `fetch` simulado, os helpers HTTP da interface (`frontend/lib/http.ts`):
 confirma que a chamada de rede é de fato feita, que uma falha de rede vira mensagem em português e que
@@ -143,14 +175,15 @@ erros `detail` da API são tratados.
 ### O que está e o que não está verificado
 
 **Verificado**
-- Backend: 177 testes automáticos, incluindo o fluxo completo (upload → pipeline → cartão), cache por
+- Backend: 215 testes automáticos, incluindo o fluxo completo (upload → pipeline → cartão), cache por
   hash, concorrência no envio, exportações com proteção contra injeção de fórmula e o OCR real do
   Tesseract (quando instalado).
 - Formato do pedido ao Claude: um teste de contrato garante que a requisição usa saída estruturada
   (`output_format`) e **não** força `tool_choice`, que o `claude-sonnet-5-5` rejeita com HTTP 400. O
   caminho de parsing foi conferido contra o SDK real com um transporte HTTP simulado.
-- Interface: `tsc`, `next build`, `check:http` e uma verificação manual no navegador contra a API de
-  demonstração.
+- Interface: `tsc`, `next build`, `check:http`, `check:ledger` e uma verificação manual no navegador
+  contra a API de demonstração, em tema claro, tema escuro e largura de celular (375 px: a página
+  não rola para o lado; a tabela de gaps rola dentro do próprio contêiner).
 
 **Não verificado**
 - A extração com o **Claude real**: nenhum teste chama a API. Não se sabe ainda a qualidade das skills,

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from skillgap.classifier import build_profile
+from skillgap.evidence import verify_evidence
 from skillgap.gap_analyzer import analyze_gaps
 from skillgap.models import ExtractedProfile
 from skillgap.pdf_reader import extract_text
@@ -22,10 +23,14 @@ def run_pipeline(data: bytes, deps: Deps, on_stage: Callable[[str], None] = lamb
     text = extract_text(data)
 
     on_stage("extracting")
-    extracted = deps.extract(scrub(text), deps.taxonomy.hint_names())
+    sent = scrub(text)
+    extracted = deps.extract(sent, deps.taxonomy.hint_names())
 
     on_stage("analyzing")
     skills, other_skills = build_profile(extracted, deps.taxonomy)
+    skills = [s.model_copy(update={"evidence_verified": verify_evidence(s.evidence, sent)}) for s in skills]
+    other_skills = [o.model_copy(update={"evidence_verified": verify_evidence(o.evidence, sent)})
+                    for o in other_skills]
     gaps, no_data_tracks = analyze_gaps(skills, deps.taxonomy)
 
     on_stage("recommending")

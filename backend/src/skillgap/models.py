@@ -23,12 +23,14 @@ class Skill(BaseModel):
     track: str
     level: int
     evidence: str
+    evidence_verified: bool | None = None  # None = not checked (old records)
 
 
 class OtherSkill(BaseModel):
     name: str
     level: int
     evidence: str
+    evidence_verified: bool | None = None  # None = not checked (old records)
 
 
 class Gap(BaseModel):

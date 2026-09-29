@@ -1,7 +1,10 @@
 export type Severity = "high" | "medium" | "low";
 
-export interface Skill { id: string; name: string; track: string; level: number; evidence: string }
-export interface OtherSkill { name: string; level: number; evidence: string }
+export interface Skill { id: string; name: string; track: string; level: number; evidence: string;
+  /** Computed by the backend: quote found in the CV text. null/absent = not checked. */
+  evidence_verified?: boolean | null }
+export interface OtherSkill { name: string; level: number; evidence: string;
+  evidence_verified?: boolean | null }
 export interface Gap {
   skill: string; name: string; track: string;
   expected: number; current: number; severity: Severity;
