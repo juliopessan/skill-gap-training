@@ -1,0 +1,95 @@
+# Taxonomia FY27 — versão inicial. Edite livremente: id, nome, sinônimos e nível esperado (1-3).
+tracks:
+  - id: foundry
+    name: Azure AI Foundry
+    skills:
+      - id: foundry.platform
+        name: Plataforma Azure AI Foundry
+        synonyms: [Azure AI Foundry, AI Foundry, Azure AI Studio]
+        expected_level: 1
+      - id: foundry.models
+        name: Model Catalog e Deployment
+        synonyms: [Model Catalog, Azure OpenAI, Azure OpenAI Service, Model Deployment, Deploy de Modelos]
+        expected_level: 2
+      - id: foundry.agents
+        name: AI Agents
+        synonyms: [Agent Service, Foundry Agent Service, Agentes de IA, Agentic AI, Multi-Agent Systems, Semantic Kernel]
+        expected_level: 2
+      - id: foundry.rag
+        name: RAG com Azure AI Search
+        synonyms: [RAG, Retrieval Augmented Generation, Azure AI Search, Azure Cognitive Search, Busca Vetorial]
+        expected_level: 2
+      - id: foundry.prompt
+        name: Prompt Engineering e Prompt Flow
+        synonyms: [Prompt Engineering, Prompt Flow, Engenharia de Prompt]
+        expected_level: 2
+      - id: foundry.safety
+        name: Content Safety e Responsible AI
+        synonyms: [Content Safety, Azure AI Content Safety, Responsible AI, IA Responsavel, Red Teaming]
+        expected_level: 1
+      - id: foundry.genaiops
+        name: GenAIOps e Avaliação
+        synonyms: [GenAIOps, LLMOps, Avaliacao de Modelos, Evaluation, Observabilidade de LLM]
+        expected_level: 2
+  - id: fabric
+    name: Microsoft Fabric
+    skills:
+      - id: fabric.platform
+        name: Plataforma Microsoft Fabric
+        synonyms: [Microsoft Fabric, Fabric]
+        expected_level: 1
+      - id: fabric.lakehouse
+        name: Lakehouse e OneLake
+        synonyms: [Lakehouse, OneLake, Delta Lake no Fabric, Arquitetura Medallion]
+        expected_level: 2
+      - id: fabric.pipelines
+        name: Data Factory e Pipelines
+        synonyms: [Data Factory, Data Pipelines, Azure Data Factory, Dataflows Gen2, ADF]
+        expected_level: 2
+      - id: fabric.warehouse
+        name: Fabric Data Warehouse
+        synonyms: [Data Warehouse, Synapse Data Warehouse, Warehouse, T-SQL]
+        expected_level: 2
+      - id: fabric.realtime
+        name: Real-Time Intelligence
+        synonyms: [Eventstream, Eventhouse, Real-Time Analytics, KQL, Kusto]
+        expected_level: 1
+      - id: fabric.powerbi
+        name: Power BI e Direct Lake
+        synonyms: [Power BI, Direct Lake, DAX, Semantic Model, Modelo Semantico]
+        expected_level: 2
+      - id: fabric.ai
+        name: Copilot e Data Science no Fabric
+        synonyms: [Copilot no Fabric, Fabric Data Science, Data Science no Fabric, AI Skills]
+        expected_level: 2
+  - id: databricks
+    name: Databricks
+    skills:
+      - id: databricks.platform
+        name: Plataforma Databricks
+        synonyms: [Databricks, Databricks Lakehouse]
+        expected_level: 1
+      - id: databricks.spark
+        name: Apache Spark
+        synonyms: [Spark, PySpark, Spark SQL, Spark Streaming]
+        expected_level: 3
+      - id: databricks.delta
+        name: Delta Lake
+        synonyms: [Delta Tables, Delta Live Tables, Lakeflow Declarative Pipelines]
+        expected_level: 2
+      - id: databricks.unity
+        name: Unity Catalog
+        synonyms: [Governanca de Dados no Databricks, Data Governance]
+        expected_level: 2
+      - id: databricks.workflows
+        name: Workflows e Lakeflow Jobs
+        synonyms: [Databricks Workflows, Databricks Jobs, Lakeflow Jobs, Lakeflow]
+        expected_level: 1
+      - id: databricks.mlflow
+        name: MLflow
+        synonyms: [MLflow Tracking, Model Registry, MLOps no Databricks]
+        expected_level: 2
+      - id: databricks.genai
+        name: Mosaic AI e GenAI
+        synonyms: [Mosaic AI, Vector Search, Agent Framework, Model Serving, RAG no Databricks, Foundation Model APIs]
+        expected_level: 2
