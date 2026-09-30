@@ -1,6 +1,7 @@
 import { CheckIcon } from "@/components/icons";
 import Flag from "@/components/Flag";
 import Ledger from "@/components/Ledger";
+import SupplementaryLinks from "@/components/SupplementaryLinks";
 import TrainingPlan from "@/components/TrainingPlan";
 import { exportUrl } from "@/lib/api";
 import { computeLedger } from "@/lib/ledger";
@@ -184,6 +185,7 @@ export default function CandidateCard({ candidate, tracks, onConfigureKey }: Pro
         ) : (
           <TrainingPlan recommendations={candidate.recommendations} trackName={trackName} skillName={skillName} />
         )}
+        <SupplementaryLinks items={candidate.supplementary} status={candidate.learn_status} skillName={skillName} />
       </div>
     </section>
   );

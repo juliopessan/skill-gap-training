@@ -10,7 +10,7 @@ rating e uma lista de treinamentos em ordem de nível, cada skill com a frase do
 <sub>Tela inicial da interface (build de produção, tema claro). Linha cheia no diagrama: calculado por
 código; tracejada: inferido pelo modelo.</sub>
 
-> **Status:** os 416 testes automáticos do backend passam, e uma execução manual com o Claude real
+> **Status:** os 482 testes automáticos do backend passam, e uma execução manual com o Claude real
 > funcionou de ponta a ponta durante o desenvolvimento (18 citações do modelo, 16 localizadas no CV).
 > Nenhum teste automático chama a API real, e a qualidade da extração ainda não foi avaliada em escala.
 > Trate a v1 como pronta para validar com CVs reais, não como validada. Detalhes em
@@ -323,7 +323,7 @@ processar com um serviço externo de LLM.
 ## Testes
 
 ```bash
-(cd backend && pytest -q)                 # 416 testes; também passa com `pytest -W error -q`
+(cd backend && pytest -q)                 # 482 testes; também passa com `pytest -W error -q`
 (cd frontend && npx tsc --noEmit && npm run check:http && npm run check:ledger && npm run check:settings \
   && npm run check:schedule && npm run check:pipeline && npm run check:brand && npm run build)
 ```
@@ -338,10 +338,46 @@ horas, citações sem verificação e o percentual das barras.
 confirma que a chamada de rede é de fato feita, que uma falha de rede vira mensagem em português e que
 erros `detail` da API são tratados.
 
+### Microsoft Learn: catálogo oficial e busca complementar
+
+Além da lista manual, o catálogo pode receber cursos, trilhas, certificações e exames **reais** da
+Microsoft Learn, com nível, duração e link oficiais:
+
+```bash
+cd backend
+.venv/bin/python -m skillgap.cli catalog sync-learn                 # idioma padrão: en-us
+.venv/bin/python -m skillgap.cli catalog sync-learn --locale pt-br --report relatorio.md
+```
+
+- **De onde vem cada dado.** Nível, duração e link são da Microsoft (Learn Catalog API). O vínculo item →
+  skill da taxonomia é **regra nossa** (`backend/config/learn_mapping.yaml`: produto da trilha + palavras-chave, ou
+  uma frase forte no título). Na tela isso aparece como "skills casadas por regra", nunca como "verificado".
+- **Duração:** só as trilhas trazem minutos confiáveis (`duration_in_minutes`, arredondados para cima em horas). Nos
+  cursos, o campo `duration_in_hours` da Microsoft vale **dias × 24** (24, 48, 96, 120), não horas de estudo, então cursos,
+  certificações e exames ficam com "horas não informadas" (nunca estimadas).
+- **Certificações** são casadas pelo título, porque o catálogo devolve `exams` vazio para quase todas as
+  relevantes; os códigos de exame só aparecem quando a Microsoft os informa.
+- **A sincronização é atômica** e só mexe em linhas `learn:*`. O que some do catálogo oficial vira
+  `retired` (não é recomendado nem listado, mas a linha fica). Uma resposta sem itens mapeados é recusada em vez de
+  aposentar o catálogo inteiro. As linhas manuais nunca são tocadas.
+- **Relatório de mapeamento** (`--report`): itens por skill, descartados por motivo e as skills sem nenhum
+  item. É a ferramenta para afinar as regras.
+- **Busca complementar via MCP** (`https://learn.microsoft.com/api/mcp`, ferramenta `microsoft_docs_search`):
+  para gaps que **nenhum item do catálogo cobre**, a tela mostra "Leitura complementar" com links de
+  documentação. Não são cursos e não têm nível. Só o nome da skill da taxonomia sai da sua máquina, nunca texto
+  do CV; só links de `learn.microsoft.com` são aceitos; qualquer falha some em silêncio (as recomendações não
+  dependem dela). Desligue com `SKILLGAP_LEARN_MCP=0`.
+- Variáveis: `SKILLGAP_LEARN_MAPPING` (YAML de regras), `SKILLGAP_LEARN_LOCALE` (padrão `en-us`; o catálogo
+  em `pt-br` tem menos itens), `SKILLGAP_LEARN_MCP`.
+- Teste ao vivo, fora da suíte e com banco temporário: `cd backend && .venv/bin/python scripts/learn_smoke.py`.
+
 ### O que está e o que não está verificado
 
 **Verificado**
-- Backend: 416 testes automáticos, incluindo o catálogo SQLite (CRUD, filtros parametrizados, view,
+- Microsoft Learn (ao vivo, 2026-09-30): o handshake completo do MCP e uma busca real; o download e a
+  normalização do catálogo (62 itens mapeados: 43 trilhas, 10 cursos, 8 certificações, 1 exame; as 21 skills da
+  taxonomia com ao menos um item). Os testes automáticos usam fixtures e um transporte falso, nunca a rede.
+- Backend: 482 testes automáticos, incluindo o catálogo SQLite (CRUD, filtros parametrizados, view,
   coexistência WAL com o banco de resultados, API e CLI), o fluxo completo (upload → pipeline → cartão), cache por
   hash, concorrência no envio, exportações com proteção contra injeção de fórmula e o OCR real do
   Tesseract (quando instalado).
@@ -365,6 +401,9 @@ erros `detail` da API são tratados.
 ## Limitações conhecidas
 
 - Taxonomia e catálogo são versões iniciais, a revisar (o catálogo não tem links nem horas e não foi verificado).
+- Os itens da Microsoft Learn têm nível, duração e link oficiais, mas o **mapeamento para as skills é por regra e
+  ainda tem falsos positivos** (itens genéricos de IA tagueados com produtos do Foundry); revise com `--report`.
+- A busca complementar do MCP é busca de documentação: seus links são leitura, não treinamento, e não têm nível.
 - `npm audit` reporta 2 achados no `postcss` embutido no Next 15 (a correção exige Next 16).
 - Sem autenticação: não exponha a API fora da sua máquina.
 - Ferramenta local para um único usuário (um processo, um arquivo SQLite).

@@ -35,7 +35,8 @@ def test_list_all_with_course_shape(client):
     assert f1 == {"id": "f1", "platform": "fabric", "title": "Fabric Fundamentals",
                   "focus": "OneLake", "level": 1, "provider": "Microsoft Learn", "kind": "curso",
                   "hours": None, "link": "", "source": "S", "verified": False,
-                  "skills": ["fabric.lakehouse", "fabric.platform"]}
+                  "skills": ["fabric.lakehouse", "fabric.platform"], "exam_codes": [],
+                  "synced_at": "", "retired": False, "match_origin": "manual"}
     f2 = next(i for i in body["items"] if i["id"] == "f2")
     assert f2["hours"] == 20 and f2["verified"] is True
 
@@ -100,3 +101,45 @@ def test_app_works_without_a_catalog_attribute(small_taxonomy):
     assert client.get("/catalog").status_code == 404
 
 
+
+LEARN = Course("learn:learn.fabric.x", "Fabric X", ("fabric.lakehouse",), 2, 3,
+               "https://learn.microsoft.com/x", platform="fabric", kind="certificação",
+               provider="Microsoft Learn", source="Microsoft Learn Catalog API", verified=True,
+               exam_codes=("DP-700",))
+
+
+@pytest.fixture
+def learn_client(small_taxonomy):
+    service, _ = make_service(small_taxonomy)
+    service.catalog.replace_all(COURSES)
+    service.catalog.sync_learn([LEARN], "2026-09-30")
+    return TestClient(create_app(service), base_url="http://localhost"), service.catalog
+
+
+def test_status_route_reports_learn_items(learn_client):
+    client, _ = learn_client
+    body = client.get("/catalog/status").json()
+    assert body == {"items": 1, "by_kind": {"certificação": 1}, "retired": 0, "last_sync": "2026-09-30"}
+
+
+def test_ids_with_colon_and_dots_resolve_and_carry_provenance(learn_client):
+    client, _ = learn_client
+    r = client.get("/catalog/learn:learn.fabric.x")
+    assert r.status_code == 200
+    j = r.json()
+    assert j["match_origin"] == "rule" and j["exam_codes"] == ["DP-700"]
+    assert j["synced_at"] == "2026-09-30" and j["retired"] is False and j["verified"] is True
+
+
+def test_retired_items_leave_the_list_but_can_still_be_fetched(learn_client):
+    client, catalog = learn_client
+    catalog.sync_learn([], "2026-10-01")
+    assert "learn:learn.fabric.x" not in ids(client.get("/catalog"))
+    j = client.get("/catalog/learn:learn.fabric.x").json()
+    assert j["retired"] is True
+    assert client.get("/catalog/status").json()["retired"] == 1
+
+
+def test_manual_course_reports_manual_origin(client):
+    j = client.get("/catalog/f1").json()
+    assert j["match_origin"] == "manual" and j["exam_codes"] == [] and j["synced_at"] == "" and j["retired"] is False

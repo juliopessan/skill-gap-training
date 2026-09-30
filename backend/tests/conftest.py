@@ -48,3 +48,9 @@ def _close_stores():
     yield
     while OPEN_STORES:
         OPEN_STORES.pop().close()
+
+
+@pytest.fixture(autouse=True)
+def _no_learn_mcp(monkeypatch):
+    """Nenhum teste toca a rede: o MCP da Learn fica desligado."""
+    monkeypatch.setenv("SKILLGAP_LEARN_MCP", "0")

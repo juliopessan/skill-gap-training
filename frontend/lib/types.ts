@@ -24,7 +24,14 @@ export interface Recommendation {
   level?: number | null;
   /** A track id. Missing/null = unknown. */
   platform?: string | null;
+  exam_codes?: string[] | null;
+  source?: string | null;
+  synced_at?: string | null;
+  /** "rule" = item da Microsoft Learn ligado às skills por regra; "manual" = lista manual. */
+  match_origin?: string | null;
 }
+/** A documentation link found by the Microsoft Learn search: not a course, no level. */
+export interface SupplementaryItem { skill: string; title: string; url: string }
 /** Computed by rule FROM LEVELS INFERRED BY THE MODEL: never a measurement. */
 export interface TrackRating {
   track: string; name: string;
@@ -52,5 +59,8 @@ export interface Candidate {
   recommendations: Recommendation[];
   /** Absent/null on old records: render nothing. */
   rating?: Rating | null;
+  /** Absent/null on old records. */
+  supplementary?: SupplementaryItem[] | null;
+  learn_status?: string | null;
 }
 export interface Track { id: string; name: string }

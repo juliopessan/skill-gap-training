@@ -53,6 +53,10 @@ class Recommendation(BaseModel):
     verified: bool | None = None
     level: int | None = None  # nível do curso (1-3); None = resultados antigos
     platform: str | None = None
+    exam_codes: list[str] = []  # só quando o catálogo os informa
+    source: str | None = None  # ex.: "Microsoft Learn Catalog API"; None = lista manual/antigo
+    synced_at: str | None = None  # data ISO da sincronização
+    match_origin: str | None = None  # "rule" (regra) | "manual"; None = resultados antigos
 
 
 class TrackRating(BaseModel):
@@ -77,6 +81,13 @@ class Rating(BaseModel):
     tracks: list[TrackRating] = []
 
 
+class Supplementary(BaseModel):
+    """Link de documentação achado pela busca da Microsoft Learn. Não é curso e não tem nível."""
+    skill: str
+    title: str
+    url: str
+
+
 class CandidateResult(BaseModel):
     id: str
     candidate: str = ""
@@ -90,3 +101,5 @@ class CandidateResult(BaseModel):
     gaps: list[Gap] = []
     recommendations: list[Recommendation] = []
     rating: Rating | None = None  # None = resultados antigos
+    supplementary: list[Supplementary] | None = None  # None = não consultado / resultados antigos
+    learn_status: str | None = None  # ok | none | unavailable | disabled; None = antigo

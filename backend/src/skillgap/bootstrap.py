@@ -1,6 +1,7 @@
 from skillgap.catalog_store import CatalogStore
 from skillgap.config import Settings
 from skillgap.keystore import KeyStore
+from skillgap.learn_mcp import LearnMcpClient, McpCache, Supplementer
 from skillgap.pipeline import Deps
 from skillgap.service import CandidateService
 from skillgap.skill_extractor import extract_profile
@@ -9,7 +10,7 @@ from skillgap.taxonomy import load_taxonomy
 
 
 def build_service(settings: Settings, extract=None,
-                  keystore: KeyStore | None = None) -> CandidateService:
+                  keystore: KeyStore | None = None, supplement=None) -> CandidateService:
     taxonomy = load_taxonomy(settings.taxonomy_path)
     catalog = CatalogStore(settings.db_path)
     try:
@@ -24,6 +25,8 @@ def build_service(settings: Settings, extract=None,
         def extract(text, hints):
             # Lê a chave a cada chamada: alterações em runtime valem na hora.
             return extract_profile(text, hints, model=settings.model, api_key=keystore.get())
+    if supplement is None and settings.learn_mcp:
+        supplement = Supplementer(LearnMcpClient(), McpCache(settings.db_path), taxonomy)
     # courses é lido do SQLite a cada CV processado (sem reiniciar o servidor).
-    return CandidateService(Store(settings.db_path), Deps(taxonomy, catalog.all_courses, extract),
+    return CandidateService(Store(settings.db_path), Deps(taxonomy, catalog.all_courses, extract, supplement),
                             keystore, catalog=catalog)

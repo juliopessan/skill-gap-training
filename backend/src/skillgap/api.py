@@ -34,12 +34,18 @@ class CourseOut(BaseModel):
     source: str
     verified: bool
     skills: list[str]
+    exam_codes: list[str]
+    synced_at: str
+    retired: bool
+    match_origin: str
 
 
 def course_out(c: Course) -> CourseOut:
     return CourseOut(id=c.id, platform=c.platform, title=c.title, focus=c.focus, level=c.level,
                      provider=c.provider, kind=c.kind, hours=c.hours, link=c.link,
-                     source=c.source, verified=c.verified, skills=list(c.skills))
+                     source=c.source, verified=c.verified, skills=list(c.skills),
+                     exam_codes=list(c.exam_codes), synced_at=c.synced_at, retired=c.retired,
+                     match_origin=c.match_origin)
 
 
 def create_app(service: CandidateService | None = None, client_factory=None,
@@ -143,6 +149,10 @@ def _add_catalog_routes(app: FastAPI, catalog) -> None:
     @app.get("/catalog/stats")
     def catalog_stats():
         return catalog.stats()
+
+    @app.get("/catalog/status")
+    def catalog_status():
+        return catalog.learn_status()
 
     @app.get("/catalog/{course_id}")
     def get_course(course_id: str):

@@ -1,4 +1,5 @@
 import argparse
+from datetime import date
 from pathlib import Path
 
 import json
@@ -7,6 +8,8 @@ from skillgap.api import course_out
 from skillgap.bootstrap import build_service
 from skillgap.catalog_store import CatalogStore, validate_courses
 from skillgap.config import Settings, load_settings
+from skillgap.learn_catalog import fetch_catalog, normalize_catalog, present_kinds
+from skillgap.learn_mapping import load_mapping, render_report, to_courses
 from skillgap.recommender import load_catalog
 from skillgap.service import CandidateService
 from skillgap.taxonomy import load_taxonomy
@@ -34,6 +37,9 @@ def _parser() -> argparse.ArgumentParser:
     csub.add_parser("stats", help="Estatísticas do catálogo")
     exp = csub.add_parser("export", help="Exporta o catálogo para CSV")
     exp.add_argument("csv", help="Arquivo CSV de saída")
+    sync = csub.add_parser("sync-learn", help="Sincroniza o catálogo oficial da Microsoft Learn")
+    sync.add_argument("--locale", help="Idioma do catálogo (padrão: SKILLGAP_LEARN_LOCALE ou en-us)")
+    sync.add_argument("--report", help="Grava o relatório de mapeamento neste arquivo (.md)")
     return parser
 
 
@@ -96,7 +102,7 @@ def _table(courses) -> str:
     return "\n".join(lines)
 
 
-def _catalog_main(args, settings: Settings) -> int:
+def _catalog_main(args, settings: Settings, learn_fetch=None) -> int:
     try:
         taxonomy = load_taxonomy(settings.taxonomy_path)
         store = CatalogStore(settings.db_path)
@@ -126,6 +132,28 @@ def _catalog_main(args, settings: Settings) -> int:
             return 0
         # Demais comandos leem o catálogo; semeia a partir do CSV se estiver vazio.
         store.seed_from_csv_if_empty(settings.catalog_path, taxonomy)
+        if cmd == "sync-learn":
+            fetch = learn_fetch or fetch_catalog
+            payload = fetch(args.locale or settings.learn_locale)
+            items, dropped = normalize_catalog(payload)
+            mapping = load_mapping(settings.learn_mapping_path, taxonomy)
+            courses, report = to_courses(items, mapping, taxonomy, dropped)
+            if not courses:
+                raise ValueError("A sincronização não trouxe nenhum item mapeado; "
+                                 "nada foi alterado no catálogo.")
+            validate_courses(courses, taxonomy)
+            counts = store.sync_learn(courses, date.today().isoformat(),
+                                      retire_kinds=present_kinds(payload))
+            print(f"Sincronização concluída: {counts['inserted']} inserido(s), "
+                  f"{counts['updated']} atualizado(s), {counts['retired']} aposentado(s). "
+                  f"Descartados: {len(report.dropped)}.")
+            text = render_report(report, taxonomy)
+            if args.report:
+                Path(args.report).write_text(text, encoding="utf-8")
+                print(f"Relatório gravado em {args.report}")
+            else:
+                print(text)
+            return 0
         if cmd == "list":
             courses = store.list_courses(platform=args.platform, level=args.level, kind=args.kind,
                                          skill=args.skill, q=args.q, limit=args.limit)
@@ -156,10 +184,10 @@ def _catalog_main(args, settings: Settings) -> int:
 
 
 def main(argv: list[str] | None = None, service: CandidateService | None = None,
-         settings: Settings | None = None) -> int:
+         settings: Settings | None = None, learn_fetch=None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "catalog":
-        return _catalog_main(args, settings or load_settings())
+        return _catalog_main(args, settings or load_settings(), learn_fetch)
     folder_path = Path(args.folder)
 
     # Check if path exists and is a directory

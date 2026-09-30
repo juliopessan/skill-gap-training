@@ -1,0 +1,69 @@
+# Regras item da Microsoft Learn -> skill da taxonomia. Aplicadas por código (sem modelo).
+# Uma skill casa quando: (produto da trilha E uma keyword em título/resumo) OU (frase 'strong' no título).
+# Frases são comparadas sem acento/caixa/pontuação e com fronteira de palavra ("multi-agent" = "multi agent").
+# Edite livremente e rode:  python -m skillgap.cli catalog sync-learn --report relatorio.md
+version: 1
+tracks:
+  foundry:
+    products: [microsoft-foundry, foundry-agent-service, foundry-tools, azure-openai]
+  fabric:
+    products: [fabric]
+  databricks:
+    products: [azure-databricks]
+skills:
+  foundry.platform:
+    keywords: [get started, fundamentals, foundry portal]
+  foundry.models:
+    keywords: [model catalog, model deployment, deploy models, azure openai, foundation model, language model, fine tune, fine tuning]
+    strong: [azure ai engineer, azure ai cloud developer, azure ai apps and agents]
+  foundry.agents:
+    keywords: [agent, agents, agentic, multi agent, semantic kernel, autogen, agent framework]
+    strong: [multi agent ai solutions, ai agent builder, azure ai apps and agents]
+  foundry.rag:
+    keywords: [rag, retrieval augmented, ai search, vector search, embeddings, grounding, knowledge base]
+    strong: [azure ai engineer, azure ai apps and agents]
+  foundry.prompt:
+    keywords: [prompt engineering, prompt flow, prompt patterns, writing prompts]
+    strong: [azure ai engineer]
+  foundry.safety:
+    keywords: [content safety, responsible ai, responsibly, red teaming, guardrails, content filters]
+  foundry.genaiops:
+    keywords: [genaiops, llmops, evaluate, evaluation, evaluations, tracing, observability, generative ai operations]
+  fabric.platform:
+    keywords: [get started, fundamentals, workspace, administer, fabric capacity, governance]
+    strong: [fabric data engineer, fabric analytics engineer]
+  fabric.lakehouse:
+    keywords: [lakehouse, onelake, delta lake, delta tables, medallion]
+    strong: [fabric data engineer]
+  fabric.pipelines:
+    keywords: [data factory, pipeline, pipelines, dataflow, dataflows, data pipelines, ingest, copy data, orchestration]
+    strong: [fabric data engineer]
+  fabric.warehouse:
+    keywords: [warehouse, data warehouse, t sql, sql analytics endpoint, dimensional]
+    strong: [fabric data engineer, fabric analytics engineer]
+  fabric.realtime:
+    keywords: [real time, real time intelligence, eventstream, eventstreams, eventhouse, event house, kql, kusto, activator]
+  fabric.powerbi:
+    keywords: [power bi, semantic model, semantic models, direct lake, dax, data visualization, dashboards, reports]
+    strong: [fabric analytics engineer]
+  fabric.ai:
+    keywords: [data science, machine learning, copilot, data agent, ai skill, ai skills, mlflow]
+  databricks.platform:
+    keywords: [get started, fundamentals, workspace, cluster, clusters, compute]
+    strong: [databricks data engineer]
+  databricks.spark:
+    keywords: [spark, pyspark, spark sql, dataframes, data frames]
+    strong: [databricks data engineer]
+  databricks.delta:
+    keywords: [delta lake, delta tables, delta live tables, lakeflow, declarative pipelines, medallion, lakehouse]
+    strong: [databricks data engineer]
+  databricks.unity:
+    keywords: [unity catalog, governance, data governance, lineage]
+    strong: [databricks data engineer]
+  databricks.workflows:
+    keywords: [workflows, jobs, lakeflow jobs, orchestration, orchestrate, ci cd, asset bundles, deployment]
+    strong: [databricks data engineer]
+  databricks.mlflow:
+    keywords: [mlflow, machine learning, model serving, feature store, mlops]
+  databricks.genai:
+    keywords: [generative ai, genai, llm, llms, vector search, rag, agent bricks, mosaic ai, ai agents]

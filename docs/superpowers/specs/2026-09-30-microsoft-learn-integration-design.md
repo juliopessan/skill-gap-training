@@ -134,3 +134,13 @@ o vínculo com as skills da taxonomia FY27 é regra nossa e aparece como tal.
 - A qualidade do mapeamento depende das regras; o relatório existe para corrigi-las.
 - Nível e duração são da Microsoft; o casamento com as skills é regra nossa, sem medição.
 - O MCP é busca de documentação: os links dele são leitura, não treinamento.
+
+## Rulings da implementação
+
+- `match_origin` é derivado do prefixo do id (`learn:` → `rule`, senão `manual`), sem coluna `origin` em `course_skills`.
+- O link do catálogo perde a query inteira (o único parâmetro é `WT.mc_id`); no MCP a query é mantida e o fragmento removido.
+- O MCP devolve `{skill, title, url}`, sem `excerpt`: o texto dos resultados é markdown de metadados da página, não prosa.
+- `Settings.learn_mcp` é `False` na dataclass e `load_settings()` liga por padrão, para que testes nunca toquem a rede.
+- O texto "horas não informadas" da interface foi mantido.
+- Regras iniciais apertadas após o teste ao vivo: palavras genéricas ("introduction", "overview", "responsible", "safety", "prompt", "monitoring", "deploy") saíram, porque puxavam itens de IA genéricos para skills do Foundry.
+- Descoberto na verificação da tela: `duration_in_hours` dos cursos vale dias × 24 (24/48/96/120), não horas de estudo; só `duration_in_minutes` (trilhas) vira horas. Cursos, certificações e exames ficam com horas desconhecidas.

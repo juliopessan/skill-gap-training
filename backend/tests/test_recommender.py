@@ -93,7 +93,7 @@ def test_unknown_hours_sort_last_on_ties_and_recommendation_carries_fields():
     gaps = [gap("a", 0, 2, "high")]
     courses = [
         Course("n", "Sem horas", ("a",), 1, None, "", provider="P", kind="certificação", verified=True),
-        Course("k", "Com horas", ("a",), 1, 30, ""),
+        Course("k", "Com horas", ("a",), 1, 30, "", verified=True),
     ]
     result = recommend(gaps, courses)
     assert [r.course_id for r in result] == ["k", "n"]
@@ -165,3 +165,37 @@ def test_recommendation_carries_level_and_platform():
 def test_empty_platform_becomes_none():
     [r] = recommend([gap("a", 0, 2, "high")], [course("q", ["a"], level=3)])
     assert r.platform is None and r.level == 3
+
+
+from skillgap.recommender import uncovered_gaps
+
+
+def test_verified_items_win_ties_before_hours():
+    gaps = [gap("a", 0, 2, "high")]
+    manual = Course("m", "Manual", ("a",), 1, 2, "", verified=False)
+    official = Course("learn:o", "Oficial", ("a",), 1, 30, "https://learn.microsoft.com/o", verified=True)
+    assert [r.course_id for r in recommend(gaps, [manual, official])] == ["learn:o", "m"]
+
+
+def test_recommendation_carries_provenance_for_learn_items():
+    gaps = [gap("a", 0, 2, "high")]
+    c = Course("learn:o", "Cert", ("a",), 2, None, "https://learn.microsoft.com/o", provider="Microsoft Learn",
+               kind="certificação", source="Microsoft Learn Catalog API", verified=True,
+               exam_codes=("AI-500",), synced_at="2026-09-30")
+    [r] = recommend(gaps, [c])
+    assert (r.exam_codes, r.source, r.synced_at, r.match_origin) == (
+        ["AI-500"], "Microsoft Learn Catalog API", "2026-09-30", "rule")
+    [m] = recommend(gaps, [course("x", ["a"])])
+    assert m.exam_codes == [] and m.source is None and m.synced_at is None and m.match_origin == "manual"
+
+
+def test_uncovered_gaps_lists_skills_no_course_can_teach_by_severity():
+    gaps = [gap("low1", 0, 2, "low"), gap("hi", 0, 2, "high"), gap("ok", 0, 2, "medium"),
+            gap("tooadv", 2, 3, "high")]
+    courses = [course("c", ["ok"]), course("basic", ["tooadv"], level=1)]  # 'basic' não ensina quem já está no nível 2
+    assert uncovered_gaps(gaps, courses) == ["hi", "tooadv", "low1"]
+
+
+def test_uncovered_gaps_ignores_courses_when_none_are_given():
+    assert uncovered_gaps([gap("a", 0, 2, "high")], []) == ["a"]
+    assert uncovered_gaps([], [course("c", ["a"])]) == []

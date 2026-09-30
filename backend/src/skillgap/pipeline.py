@@ -4,11 +4,11 @@ from typing import Callable
 from skillgap.classifier import build_profile
 from skillgap.evidence import verify_evidence
 from skillgap.gap_analyzer import analyze_gaps
-from skillgap.models import ExtractedProfile
+from skillgap.models import ExtractedProfile, Supplementary
 from skillgap.rating import compute_rating
 from skillgap.pdf_reader import extract_text
 from skillgap.privacy import scrub
-from skillgap.recommender import Course, recommend
+from skillgap.recommender import Course, recommend, uncovered_gaps
 from skillgap.taxonomy import Taxonomy
 
 
@@ -18,6 +18,7 @@ class Deps:
     # Lista fixa ou callable resolvido a cada execução (edições no banco valem no próximo CV).
     courses: list[Course] | Callable[[], list[Course]]
     extract: Callable[[str, list[str]], ExtractedProfile]
+    supplement: Callable[[list[str]], tuple[list[Supplementary], str]] | None = None
 
 
 def run_pipeline(data: bytes, deps: Deps, on_stage: Callable[[str], None] = lambda s: None) -> dict:
@@ -39,6 +40,14 @@ def run_pipeline(data: bytes, deps: Deps, on_stage: Callable[[str], None] = lamb
     on_stage("recommending")
     courses = deps.courses() if callable(deps.courses) else deps.courses
     recommendations = recommend(gaps, courses)
+    supplementary: list[Supplementary] | None = None
+    learn_status: str | None = None
+    if deps.supplement is not None:
+        # Só nomes de skills da taxonomia saem daqui; nunca texto do CV.
+        try:
+            supplementary, learn_status = deps.supplement(uncovered_gaps(gaps, courses))
+        except Exception:
+            supplementary, learn_status = [], "unavailable"
 
     return {
         "candidate": extracted.candidate,
@@ -48,4 +57,6 @@ def run_pipeline(data: bytes, deps: Deps, on_stage: Callable[[str], None] = lamb
         "recommendations": recommendations,
         "no_data_tracks": no_data_tracks,
         "rating": rating,
+        "supplementary": supplementary,
+        "learn_status": learn_status,
     }

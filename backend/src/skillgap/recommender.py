@@ -33,6 +33,13 @@ class Course:
     kind: str = "curso"
     source: str = ""
     verified: bool = False
+    exam_codes: tuple[str, ...] = ()
+    synced_at: str = ""  # "" = linha manual ou nunca sincronizada
+    retired: bool = False  # True = sumiu do catálogo oficial; nunca é recomendada
+
+    @property
+    def match_origin(self) -> str:
+        return "rule" if self.id.startswith("learn:") else "manual"
 
 
 def _fold(text: str) -> str:
@@ -68,6 +75,8 @@ def load_catalog(path: str | Path) -> list[Course]:
             cid = row["id"]
             if not cid:
                 raise fail("id vazio")
+            if cid.startswith("learn:"):
+                raise fail("ids com prefixo 'learn:' são reservados à sincronização da Microsoft Learn")
             if cid in seen:
                 raise fail(f"id duplicado '{cid}'")
             seen.add(cid)
@@ -110,10 +119,20 @@ def recommend(gaps: list[Gap], courses: list[Course], limit: int = 10) -> list[R
         if covered:
             score = sum(WEIGHT[g.severity] for g in covered)
             scored.append((score, course, [g.skill for g in covered]))
-    scored.sort(key=lambda item: (-item[0], item[1].hours is None, item[1].hours or 0, item[1].id))
+    scored.sort(key=lambda item: (-item[0], not item[1].verified, item[1].hours is None,
+                                  item[1].hours or 0, item[1].id))
     return [
         Recommendation(course_id=c.id, title=c.title, covers=covers, hours=c.hours, link=c.link,
                        provider=c.provider or None, kind=c.kind or None, verified=c.verified,
-                       level=c.level, platform=c.platform or None)
+                       level=c.level, platform=c.platform or None,
+                       exam_codes=list(c.exam_codes), source=c.source or None,
+                       synced_at=c.synced_at or None, match_origin=c.match_origin)
         for _, c, covers in scored[:limit]
     ]
+
+
+def uncovered_gaps(gaps: list[Gap], courses: list[Course]) -> list[str]:
+    """Skills em gap que nenhum curso do catálogo cobre no nível certo (mais graves primeiro)."""
+    ordered = sorted(gaps, key=lambda g: -WEIGHT[g.severity])
+    return [g.skill for g in ordered
+            if not any(g.skill in c.skills and c.level >= g.current for c in courses)]

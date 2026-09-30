@@ -11,7 +11,8 @@
     "check:settings": "node lib/settings.check.mjs",
     "check:schedule": "node lib/schedule.check.mjs",
     "check:pipeline": "node lib/pipeline.check.mjs",
-    "check:brand": "node lib/brand.check.mjs"
+    "check:brand": "node lib/brand.check.mjs",
+    "check:learn": "node lib/learn.check.mjs"
   },
   "dependencies": {
     "motion": "^13.4.6",

@@ -2,13 +2,9 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 import { fmtHours, hasHours } from "@/lib/ledger";
+import { certificationsLast, kindLabel, learnSourceLine, linkLabel } from "@/lib/learn";
 import { buildSchedule, groupByLevel, LEVEL_LABEL, nextMonday, type CadenceWeeks } from "@/lib/schedule";
 import type { Recommendation } from "@/lib/types";
-
-const KIND: Record<string, string> = {
-  course: "curso", curso: "curso",
-  certification: "certificação", certificacao: "certificação", "certificação": "certificação",
-};
 
 const CADENCES: { value: CadenceWeeks; label: string }[] = [
   { value: 1, label: "1 treinamento a cada 1 semana" },
@@ -34,7 +30,8 @@ export default function TrainingPlan({ recommendations, trackName, skillName }: 
   const [cadence, setCadence] = useState<CadenceWeeks>(2);
   useEffect(() => { setStart(nextMonday(new Date())); }, []);
 
-  const stages = useMemo(() => groupByLevel(recommendations), [recommendations]);
+  const ordered = useMemo(() => certificationsLast(recommendations), [recommendations]);
+  const stages = useMemo(() => groupByLevel(ordered), [ordered]);
   const slots = useMemo(() => buildSchedule(recommendations.length, start, cadence), [recommendations.length, start, cadence]);
 
   return (
@@ -81,17 +78,20 @@ export default function TrainingPlan({ recommendations, trackName, skillName }: 
                   </div>
                   <div className="course-meta">
                     {r.provider && <>{r.provider} · </>}
-                    {r.kind && <>{KIND[r.kind.toLowerCase()] ?? r.kind} · </>}
+                    {r.kind && <>{kindLabel(r.kind)} · </>}
                     {level && <>{level} · </>}
                     {r.platform && <>{trackName(r.platform)} · </>}
                     {hasHours(r.hours)
                       ? <>{fmtHours(r.hours)} h</>
                       : <span className="course-hours--unknown">horas não informadas</span>}
-                    {" · "}cobre: {r.covers.map(skillName).join(", ")}
+                    {" · "}
+                    {r.exam_codes && r.exam_codes.length > 0 && <>exame {r.exam_codes.join(", ")} · </>}
+                    cobre: {r.covers.map(skillName).join(", ")}
                   </div>
+                  {learnSourceLine(r) && <div className="course-source">{learnSourceLine(r)}</div>}
                   {isHttpUrl(r.link) && (
                     <a className="course-link" href={r.link} target="_blank" rel="noopener noreferrer">
-                      Abrir curso →
+                      {linkLabel(r.kind)}
                     </a>
                   )}
                 </li>

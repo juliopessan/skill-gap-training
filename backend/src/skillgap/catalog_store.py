@@ -7,6 +7,7 @@ concatenada ao SQL.
 from __future__ import annotations
 
 import csv
+import dataclasses
 import sqlite3
 import threading
 from pathlib import Path
@@ -40,10 +41,17 @@ CREATE VIEW IF NOT EXISTS v_course_coverage AS
   FROM courses c LEFT JOIN course_skills cs ON cs.course_id = c.id GROUP BY c.id;
 """
 
+_MIGRATIONS = (
+    ("exam_codes", "ALTER TABLE courses ADD COLUMN exam_codes TEXT NOT NULL DEFAULT ''"),
+    ("synced_at", "ALTER TABLE courses ADD COLUMN synced_at TEXT NOT NULL DEFAULT ''"),
+    ("retired", "ALTER TABLE courses ADD COLUMN retired INTEGER NOT NULL DEFAULT 0"),
+)
+
 _SELECT = (
     "SELECT c.id, c.platform, c.title, c.focus, c.level, c.provider, c.kind, c.hours, "
     "c.link, c.source, c.verified, "
-    "COALESCE((SELECT group_concat(skill_id, ';') FROM course_skills WHERE course_id = c.id), '') "
+    "COALESCE((SELECT group_concat(skill_id, ';') FROM course_skills WHERE course_id = c.id), ''), "
+    "c.exam_codes, c.synced_at, c.retired "
     "FROM courses c")
 
 CSV_HEADER = ["id", "plataforma", "titulo", "foco", "nivel", "provedor", "tipo",
@@ -56,9 +64,11 @@ def _like_escape(text: str) -> str:
 
 def _to_course(row) -> Course:
     skills = tuple(sorted(s for s in row[11].split(";") if s))
+    exams = tuple(e for e in row[12].split(";") if e)
     return Course(id=row[0], platform=row[1], title=row[2], focus=row[3], level=row[4],
                   provider=row[5], kind=row[6], hours=row[7], link=row[8], source=row[9],
-                  verified=bool(row[10]), skills=skills)
+                  verified=bool(row[10]), skills=skills, exam_codes=exams,
+                  synced_at=row[13], retired=bool(row[14]))
 
 
 def validate_courses(courses: list[Course], taxonomy: Taxonomy) -> None:
@@ -86,6 +96,10 @@ class CatalogStore:
             if path != ":memory:":
                 self._db.execute("PRAGMA journal_mode=WAL")
             self._db.executescript(SCHEMA)
+            have = {r[1] for r in self._db.execute("PRAGMA table_info(courses)")}
+            for column, ddl in _MIGRATIONS:
+                if column not in have:
+                    self._db.execute(ddl)
             self._db.commit()
 
     def close(self) -> None:
@@ -100,14 +114,17 @@ class CatalogStore:
     def _insert(db: sqlite3.Connection, course: Course) -> None:
         db.execute(
             "INSERT INTO courses (id, platform, title, focus, level, provider, kind, hours, "
-            "link, source, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "link, source, verified, exam_codes, synced_at, retired) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(id) DO UPDATE SET platform=excluded.platform, title=excluded.title, "
             "focus=excluded.focus, level=excluded.level, provider=excluded.provider, "
             "kind=excluded.kind, hours=excluded.hours, link=excluded.link, "
-            "source=excluded.source, verified=excluded.verified",
+            "source=excluded.source, verified=excluded.verified, exam_codes=excluded.exam_codes, "
+            "synced_at=excluded.synced_at, retired=excluded.retired",
             (course.id, course.platform, course.title, course.focus, course.level,
              course.provider, course.kind, course.hours, course.link, course.source,
-             int(course.verified)))
+             int(course.verified), ";".join(course.exam_codes), course.synced_at,
+             int(course.retired)))
         db.execute("DELETE FROM course_skills WHERE course_id = ?", (course.id,))
         db.executemany("INSERT INTO course_skills (course_id, skill_id) VALUES (?, ?)",
                        [(course.id, s) for s in dict.fromkeys(course.skills)])
@@ -128,7 +145,8 @@ class CatalogStore:
 
     def list_courses(self, platform: str | None = None, level: int | None = None,
                      kind: str | None = None, skill: str | None = None,
-                     q: str | None = None, limit: int | None = None) -> list[Course]:
+                     q: str | None = None, limit: int | None = None,
+                     include_retired: bool = False) -> list[Course]:
         where: list[str] = []
         params: list[object] = []
         if platform is not None:
@@ -149,6 +167,8 @@ class CatalogStore:
             where.append("(c.title LIKE ? ESCAPE '\\' OR c.focus LIKE ? ESCAPE '\\' "
                          "OR c.provider LIKE ? ESCAPE '\\')")
             params.extend([pattern, pattern, pattern])
+        if not include_retired:
+            where.append("c.retired = 0")
         sql = _SELECT + (" WHERE " + " AND ".join(where) if where else "")
         sql += " ORDER BY c.platform, c.level, c.id"
         if limit is not None:
@@ -166,13 +186,14 @@ class CatalogStore:
     def stats(self) -> dict:
         def grouped(column: str) -> dict[str, int]:
             rows = self._db.execute(
-                f"SELECT {column}, COUNT(*) FROM courses GROUP BY {column} ORDER BY {column}")
+                f"SELECT {column}, COUNT(*) FROM courses WHERE retired = 0 "
+                f"GROUP BY {column} ORDER BY {column}")
             return {str(k): n for k, n in rows}
 
         with self._lock:
             total, verified, unknown = self._db.execute(
                 "SELECT COUNT(*), COALESCE(SUM(verified), 0), "
-                "COALESCE(SUM(hours IS NULL), 0) FROM courses").fetchone()
+                "COALESCE(SUM(hours IS NULL), 0) FROM courses WHERE retired = 0").fetchone()
             return {
                 "total": total,
                 "by_platform": grouped("platform"),
@@ -182,6 +203,44 @@ class CatalogStore:
                 "unverified": total - verified,
                 "hours_unknown": unknown,
             }
+
+    def sync_learn(self, items: list[Course], synced_at: str,
+                   retire_kinds: set[str] | None = None) -> dict[str, int]:
+        """Upsert atômico dos itens ``learn:*``; aposenta os que sumiram do catálogo oficial.
+
+        Nunca toca linhas cujo id não começa com ``learn:`` (comparação sensível a caixa).
+        ``retire_kinds`` limita a aposentadoria aos tipos informados (None = todos).
+        """
+        bad = [c.id for c in items if not c.id.startswith("learn:")]
+        if bad:
+            raise ValueError("sync_learn só aceita ids com prefixo 'learn:': " + ", ".join(bad))
+        incoming = {c.id for c in items}
+        with self._lock, self._db:
+            rows = self._db.execute(
+                "SELECT id, retired, kind FROM courses WHERE substr(id, 1, 6) = 'learn:'").fetchall()
+            existing = {row[0]: bool(row[1]) for row in rows}
+            kind_of = {row[0]: row[2] for row in rows}
+            for course in items:
+                self._insert(self._db, dataclasses.replace(
+                    course, synced_at=synced_at, retired=False))
+            gone = [cid for cid in existing if cid not in incoming
+                    and (retire_kinds is None or kind_of[cid] in retire_kinds)]
+            self._db.executemany("UPDATE courses SET retired = 1 WHERE id = ?",
+                                 [(cid,) for cid in gone])
+        return {"inserted": len(incoming - existing.keys()),
+                "updated": len(incoming & existing.keys()),
+                "retired": sum(1 for cid in gone if not existing[cid])}
+
+    def learn_status(self) -> dict:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT kind, COUNT(*) FROM courses WHERE substr(id, 1, 6) = 'learn:' AND retired = 0 "
+                "GROUP BY kind ORDER BY kind").fetchall()
+            retired, last = self._db.execute(
+                "SELECT COALESCE(SUM(retired), 0), MAX(synced_at) FROM courses "
+                "WHERE substr(id, 1, 6) = 'learn:'").fetchone()
+        return {"items": sum(n for _, n in rows), "by_kind": {k: n for k, n in rows},
+                "retired": retired, "last_sync": last or None}
 
     def seed_from_csv_if_empty(self, path: str | Path, taxonomy: Taxonomy) -> int:
         if self.count() > 0:

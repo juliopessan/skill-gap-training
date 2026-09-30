@@ -26,7 +26,7 @@ export default function Footer() {
         <div className="footer-notes">
           <p>Só o texto do CV vai ao Claude, com contatos removidos (melhor esforço).</p>
           <p>A chave da API fica só na memória do servidor local.</p>
-          <p>O catálogo de treinamentos ainda não foi verificado: confirme na fonte.</p>
+          <p>Itens da Microsoft Learn vêm do catálogo oficial (nível, duração e link); a lista manual segue não verificada: confirme na fonte.</p>
           <p className="footer-scope">Ferramenta local, de uso individual</p>
         </div>
       </div>
