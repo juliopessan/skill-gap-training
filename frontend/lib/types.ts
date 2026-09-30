@@ -10,7 +10,33 @@ export interface Gap {
   expected: number; current: number; severity: Severity;
 }
 export interface Recommendation {
-  course_id: string; title: string; covers: string[]; hours: number; link: string;
+  course_id: string; title: string; covers: string[];
+  /** null = the source list gives no course load. */
+  hours: number | null;
+  /** "" = no link known. */
+  link: string;
+  /** Older records lack the next three: missing/null means unknown. */
+  provider?: string | null;
+  kind?: string | null;
+  /** false = the course comes from an unverified list (title, level, hours, link not checked). */
+  verified?: boolean | null;
+  /** 1 Básico, 2 Intermediário, 3 Avançado. Missing/null = unknown. */
+  level?: number | null;
+  /** A track id. Missing/null = unknown. */
+  platform?: string | null;
+}
+/** Computed by rule FROM LEVELS INFERRED BY THE MODEL: never a measurement. */
+export interface TrackRating {
+  track: string; name: string;
+  adherence: number; adherence_supported: number;
+  covered: number; expected: number; skills_rated: number;
+  mean_level: number | null; level_label: string | null;
+}
+export interface Rating {
+  adherence: number; adherence_supported: number;
+  covered: number; expected: number;
+  mean_level: number | null; level_label: string | null;
+  tracks: TrackRating[];
 }
 export interface Candidate {
   id: string;
@@ -24,5 +50,7 @@ export interface Candidate {
   other_skills: OtherSkill[];
   gaps: Gap[];
   recommendations: Recommendation[];
+  /** Absent/null on old records: render nothing. */
+  rating?: Rating | null;
 }
 export interface Track { id: string; name: string }

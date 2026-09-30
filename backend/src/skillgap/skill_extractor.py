@@ -27,11 +27,13 @@ def extract_profile(
     client=None,
     model: str = "claude-sonnet-5-5",
     retries: int = 2,
+    api_key: str | None = None,
 ) -> ExtractedProfile:
     if client is None:
-        if not os.environ.get("ANTHROPIC_API_KEY"):
+        key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        if not key:
             raise PipelineError("LLM_UNAVAILABLE")
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(api_key=key)
 
     text = re.sub(r"(?i)<\s*/?\s*cv\s*>", "", text)
     request = {

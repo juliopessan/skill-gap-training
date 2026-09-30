@@ -47,7 +47,7 @@ def _gap_rows(result: CandidateResult):
 
 def _course_rows(result: CandidateResult):
     for r in result.recommendations:
-        yield ["treinamento", r.title, "", "", "", "", r.hours, r.link, ""]
+        yield ["treinamento", r.title, "", "", "", "", "" if r.hours is None else r.hours, r.link, ""]
 
 
 def to_csv(result: CandidateResult) -> str:

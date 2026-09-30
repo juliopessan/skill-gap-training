@@ -12,7 +12,7 @@ CV = make_text_pdf(["Maria Silva", "Experience with Microsoft Fabric OneLake and
 @pytest.fixture
 def setup(small_taxonomy):
     service, extractor = make_service(small_taxonomy)
-    return TestClient(create_app(service)), extractor
+    return TestClient(create_app(service), base_url="http://localhost"), extractor
 
 
 def upload(client, *files):
@@ -94,7 +94,7 @@ def test_export_of_unfinished_candidate_is_409(setup, small_taxonomy):
     client, _ = setup
     service, _ = make_service(small_taxonomy)
     pending, _ = service.submit(CV)
-    other = TestClient(create_app(service))
+    other = TestClient(create_app(service), base_url="http://localhost")
     assert other.get(f"/candidates/{pending.id}/export").status_code == 409
 
 
@@ -164,3 +164,14 @@ def test_candidate_json_exposes_evidence_verified_on_skills(setup):
     card = client.get(f"/candidates/{item['id']}").json()
     assert card["skills"]
     assert all("evidence_verified" in s and isinstance(s["evidence_verified"], bool) for s in card["skills"])
+
+
+def test_candidate_json_exposes_rating_and_recommendation_level_platform(setup):
+    client, _ = setup
+    [item] = upload(client, ("maria.pdf", CV)).json()
+    card = client.get(f"/candidates/{item['id']}").json()
+    assert isinstance(card["rating"], dict)
+    assert {t["track"] for t in card["rating"]["tracks"]} == {"fabric", "databricks"}
+    assert card["rating"]["adherence"] == 57.1
+    rec = card["recommendations"][0]
+    assert rec["level"] == 1 and rec["platform"] is None

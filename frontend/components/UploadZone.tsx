@@ -1,12 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type Ref } from "react";
+import { UploadIcon } from "@/components/icons";
 
 interface Props {
   onFiles: (files: File[]) => void;
+  ref?: Ref<HTMLDivElement>;
 }
 
-export default function UploadZone({ onFiles }: Props) {
+export default function UploadZone({ onFiles, ref }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
 
@@ -16,6 +18,8 @@ export default function UploadZone({ onFiles }: Props) {
 
   return (
     <div
+      ref={ref}
+      id="upload"
       className={`upload ${over ? "upload--over" : ""}`}
       onDragOver={(e) => { e.preventDefault(); setOver(true); }}
       onDragLeave={() => setOver(false)}
@@ -34,6 +38,7 @@ export default function UploadZone({ onFiles }: Props) {
         ref={input} type="file" accept="application/pdf,.pdf" multiple hidden
         onChange={(e) => { pick(e.target.files); e.target.value = ""; }}
       />
+      <UploadIcon className="upload-icon" size={20} />
       <strong>Arraste os mini CVs em PDF aqui</strong>
       <span>ou clique para escolher. O restante acontece sozinho.</span>
     </div>

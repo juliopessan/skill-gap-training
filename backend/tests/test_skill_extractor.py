@@ -114,3 +114,46 @@ def test_missing_api_key_raises_llm_unavailable(monkeypatch):
     with pytest.raises(PipelineError) as error:
         extract_profile("cv", [])
     assert error.value.code == "LLM_UNAVAILABLE"
+
+
+def test_api_key_argument_builds_the_client(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    seen = {}
+
+    class SpyClient:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+            self.messages = SimpleNamespace(parse=lambda **kw: SimpleNamespace(
+                stop_reason="end_turn",
+                parsed_output=ExtractedProfile(candidate="Ana", skills=[])))
+
+    monkeypatch.setattr("skillgap.skill_extractor.anthropic.Anthropic", SpyClient)
+    profile = extract_profile("cv", [], api_key="sk-ant-test-0000000000000000")
+    assert seen == {"api_key": "sk-ant-test-0000000000000000"}
+    assert profile.candidate == "Ana"
+
+
+def test_no_client_no_key_no_env_does_not_build_a_client(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    def boom(**kwargs):
+        raise AssertionError("client must not be constructed")
+
+    monkeypatch.setattr("skillgap.skill_extractor.anthropic.Anthropic", boom)
+    with pytest.raises(PipelineError) as error:
+        extract_profile("cv", [])
+    assert error.value.code == "LLM_UNAVAILABLE"
+
+
+def test_env_var_is_used_when_no_api_key_argument(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-envenvenvenvenvenv")
+    seen = {}
+
+    def spy(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(messages=SimpleNamespace(parse=lambda **kw: SimpleNamespace(
+            stop_reason="end_turn", parsed_output=ExtractedProfile(candidate="Ana", skills=[]))))
+
+    monkeypatch.setattr("skillgap.skill_extractor.anthropic.Anthropic", spy)
+    extract_profile("cv", [])
+    assert seen == {"api_key": "sk-ant-test-envenvenvenvenvenv"}

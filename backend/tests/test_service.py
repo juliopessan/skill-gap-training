@@ -27,7 +27,8 @@ def test_full_pipeline_produces_skills_gaps_and_recommendations(small_taxonomy):
         "fabric.pipelines": "high", "fabric.lakehouse": "low"}
     assert done.no_data_tracks == ["foundry"]
     assert [r.course_id for r in done.recommendations] == ["c1"]
-    assert done.recommendations[0].covers == ["fabric.pipelines", "fabric.lakehouse"]
+    # o catálogo SQLite devolve as skills de cada curso ordenadas
+    assert done.recommendations[0].covers == ["fabric.lakehouse", "fabric.pipelines"]
 
 
 def test_extractor_receives_scrubbed_text_and_taxonomy_hints(small_taxonomy):
@@ -87,9 +88,9 @@ def test_tracks_lists_id_and_name(small_taxonomy):
 def test_build_service_loads_shipped_config(tmp_path):
     settings = Settings(db_path=str(tmp_path / "x.db"))
     service = build_service(settings, extract=FakeExtractor())
-    OPEN_STORES.append(service.store)
+    OPEN_STORES.extend([service.store, service.catalog])
     assert [t["id"] for t in service.tracks()] == ["foundry", "fabric", "databricks"]
-    assert len(service.deps.courses) >= 10
+    assert len(service.deps.courses()) == 26
 
 
 def test_restart_fails_stuck_processing_upload_so_resubmit_is_new(small_taxonomy):

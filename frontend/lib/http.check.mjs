@@ -6,6 +6,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+const say = (...parts) => process.stdout.write(parts.join(" ") + "\n");
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = mkdtempSync(join(tmpdir(), "http-check-"));
@@ -21,16 +22,16 @@ const got = await request("http://x/y", { method: "POST" }, async (...a) => { ca
 assert.equal(calls.length, 1);
 assert.deepEqual(calls[0], ["http://x/y", { method: "POST" }]);
 assert.equal(got, ok);
-console.log("ok (a) fetch called once and Response returned");
+say("ok (a) fetch called once and Response returned");
 
 // (b) network failure -> Portuguese message
 await assert.rejects(
   request("http://x/y", undefined, async () => { throw new TypeError("Failed to fetch"); }, "http://base:1"),
   { message: "Não consegui falar com a API. Ela está rodando em http://base:1?" });
-console.log("ok (b) TypeError('Failed to fetch') -> mensagem em português");
+say("ok (b) TypeError('Failed to fetch') -> mensagem em português");
 
 // (c) json() error handling
 await assert.rejects(json(new Response(JSON.stringify({ detail: "texto" }), { status: 413 })), { message: "texto" });
 await assert.rejects(json(new Response(JSON.stringify({ detail: [{ msg: "x" }] }), { status: 422 })), { message: "Erro 422" });
 assert.deepEqual(await json(new Response('{"a":1}', { status: 200 })), { a: 1 });
-console.log("ok (c) json(): string detail, non-string detail, success");
+say("ok (c) json(): string detail, non-string detail, success");

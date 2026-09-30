@@ -6,7 +6,9 @@ import threading
 import uuid
 from pathlib import Path
 
+from skillgap.catalog_store import CatalogStore
 from skillgap.errors import MESSAGES, PipelineError
+from skillgap.keystore import KeyStore
 from skillgap.models import CandidateResult
 from skillgap.pipeline import Deps, run_pipeline
 from skillgap.store import Store
@@ -17,9 +19,12 @@ STALE_MESSAGE = "Processamento interrompido (o servidor foi reiniciado). Envie o
 
 
 class CandidateService:
-    def __init__(self, store: Store, deps: Deps):
+    def __init__(self, store: Store, deps: Deps, keystore: KeyStore | None = None,
+                 catalog: CatalogStore | None = None):
         self.store = store
+        self.catalog = catalog
         self.deps = deps
+        self.keystore = keystore if keystore is not None else KeyStore()
         self._submit_lock = threading.Lock()
         # Premissa: um único processo do servidor é dono do banco. Logo, qualquer
         # registro 'processing' ao iniciar ficou órfão de uma execução interrompida.

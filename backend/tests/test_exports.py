@@ -116,3 +116,20 @@ def test_ordinary_values_unchanged_and_sole_minus_prefixed():
         workbook = load_workbook(io.BytesIO(to_xlsx(skill_result)))
         values = [c.value for row in workbook["Skills"].iter_rows(min_row=2) for c in row]
         assert expected_output in values, f"XLSX: expected {expected_output!r} in {values}"
+
+
+def test_exports_write_empty_cell_for_unknown_hours():
+    rec = Recommendation(course_id="c9", title="Sem horas", covers=["x"], hours=None, link="")
+    result = sample(recommendations=[rec])
+    row = parse(to_csv(result))[-1]
+    assert row["tipo"] == "treinamento" and row["horas"] == "" and row["link"] == ""
+    ws = load_workbook(io.BytesIO(to_xlsx(result)))["Treinamentos"]
+    values = [c.value for c in ws[2]]
+    assert values[HEADER.index("horas")] in (None, "")
+
+
+def test_old_stored_result_json_without_new_recommendation_fields_still_loads():
+    old = ('{"id":"1","status":"done","recommendations":[{"course_id":"c1","title":"T",'
+           '"covers":["a"],"hours":8,"link":"https://x"}]}')
+    [rec] = CandidateResult.model_validate_json(old).recommendations
+    assert rec.hours == 8 and rec.provider is None and rec.kind is None and rec.verified is None

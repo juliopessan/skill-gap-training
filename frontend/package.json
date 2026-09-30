@@ -7,9 +7,14 @@
     "start": "next start -p 3000",
     "typecheck": "tsc --noEmit",
     "check:http": "node lib/http.check.mjs",
-    "check:ledger": "node lib/ledger.check.mjs"
+    "check:ledger": "node lib/ledger.check.mjs",
+    "check:settings": "node lib/settings.check.mjs",
+    "check:schedule": "node lib/schedule.check.mjs",
+    "check:pipeline": "node lib/pipeline.check.mjs",
+    "check:brand": "node lib/brand.check.mjs"
   },
   "dependencies": {
+    "motion": "^13.4.6",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

@@ -1,9 +1,15 @@
 import argparse
 from pathlib import Path
 
+import json
+
+from skillgap.api import course_out
 from skillgap.bootstrap import build_service
-from skillgap.config import load_settings
+from skillgap.catalog_store import CatalogStore, validate_courses
+from skillgap.config import Settings, load_settings
+from skillgap.recommender import load_catalog
 from skillgap.service import CandidateService
+from skillgap.taxonomy import load_taxonomy
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -12,6 +18,22 @@ def _parser() -> argparse.ArgumentParser:
     process = sub.add_parser("process", help="Processa todos os PDFs de uma pasta")
     process.add_argument("folder", help="Pasta com os mini CVs (.pdf)")
     process.add_argument("--out", default="out", help="Pasta de saída dos JSONs")
+    catalog = sub.add_parser("catalog", help="Gerencia o catálogo de treinamentos (SQLite)")
+    csub = catalog.add_subparsers(dest="catalog_command", required=True)
+    imp = csub.add_parser("import", help="Importa um CSV para o catálogo (upsert por id)")
+    imp.add_argument("csv", help="Arquivo CSV do catálogo")
+    imp.add_argument("--replace", action="store_true", help="Substitui todo o catálogo")
+    lst = csub.add_parser("list", help="Lista cursos")
+    lst.add_argument("--platform")
+    lst.add_argument("--level", type=int, choices=[1, 2, 3])
+    lst.add_argument("--kind")
+    lst.add_argument("--skill")
+    lst.add_argument("--q", help="Busca em título, foco e provedor")
+    lst.add_argument("--limit", type=int)
+    lst.add_argument("--json", action="store_true", help="Saída em JSON")
+    csub.add_parser("stats", help="Estatísticas do catálogo")
+    exp = csub.add_parser("export", help="Exporta o catálogo para CSV")
+    exp.add_argument("csv", help="Arquivo CSV de saída")
     return parser
 
 
@@ -63,8 +85,81 @@ def assign_output_names(paths: list[Path]) -> dict[Path, str]:
     return result
 
 
-def main(argv: list[str] | None = None, service: CandidateService | None = None) -> int:
+def _table(courses) -> str:
+    header = ["id", "plataforma", "nível", "tipo", "verificado", "horas", "título"]
+    rows = [[c.id, c.platform, str(c.level), c.kind, "sim" if c.verified else "não",
+             "—" if c.hours is None else str(c.hours), c.title] for c in courses]
+    widths = [max(len(r[i]) for r in [header, *rows]) for i in range(len(header) - 1)]
+    lines = []
+    for r in [header, *rows]:
+        lines.append("  ".join(r[i].ljust(widths[i]) for i in range(len(widths))) + "  " + r[-1])
+    return "\n".join(lines)
+
+
+def _catalog_main(args, settings: Settings) -> int:
+    try:
+        taxonomy = load_taxonomy(settings.taxonomy_path)
+        store = CatalogStore(settings.db_path)
+    except (OSError, ValueError) as exc:
+        print(f"ERRO  {exc}")
+        return 1
+    try:
+        cmd = args.catalog_command
+        if cmd == "import":
+            path = Path(args.csv)
+            if not path.is_file():
+                print(f"ERRO  Arquivo não encontrado: {path}")
+                return 1
+            courses = load_catalog(path)
+            validate_courses(courses, taxonomy)
+            if args.replace:
+                removed = store.count()
+                store.replace_all(courses)
+                print(f"Catálogo substituído: {len(courses)} curso(s) importado(s), "
+                      f"{removed} anterior(es) removido(s).")
+            else:
+                existing = {c.id for c in store.all_courses()}
+                updated = sum(1 for c in courses if c.id in existing)
+                store.upsert(courses)
+                print(f"Importação concluída: {len(courses) - updated} inserido(s), "
+                      f"{updated} atualizado(s).")
+            return 0
+        # Demais comandos leem o catálogo; semeia a partir do CSV se estiver vazio.
+        store.seed_from_csv_if_empty(settings.catalog_path, taxonomy)
+        if cmd == "list":
+            courses = store.list_courses(platform=args.platform, level=args.level, kind=args.kind,
+                                         skill=args.skill, q=args.q, limit=args.limit)
+            if args.json:
+                print(json.dumps([course_out(c).model_dump() for c in courses],
+                                 ensure_ascii=False, indent=2))
+            elif not courses:
+                print("Nenhum curso encontrado.")
+            else:
+                print(_table(courses))
+        elif cmd == "stats":
+            s = store.stats()
+            print(f"Total de cursos: {s['total']}")
+            for label, key in (("Por plataforma", "by_platform"), ("Por nível", "by_level"),
+                               ("Por tipo", "by_kind")):
+                print(f"{label}: " + ", ".join(f"{k}={v}" for k, v in s[key].items()))
+            print(f"Verificados: {s['verified']}  Não verificados: {s['unverified']}")
+            print(f"Horas desconhecidas: {s['hours_unknown']}")
+        elif cmd == "export":
+            store.export_csv(args.csv)
+            print(f"Catálogo exportado para {args.csv} ({store.count()} curso(s)).")
+        return 0
+    except (OSError, ValueError) as exc:
+        print(f"ERRO  {exc}")
+        return 1
+    finally:
+        store.close()
+
+
+def main(argv: list[str] | None = None, service: CandidateService | None = None,
+         settings: Settings | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "catalog":
+        return _catalog_main(args, settings or load_settings())
     folder_path = Path(args.folder)
 
     # Check if path exists and is a directory

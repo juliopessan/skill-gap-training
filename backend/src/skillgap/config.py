@@ -6,7 +6,7 @@ from dataclasses import dataclass
 class Settings:
     db_path: str = "data/skillgap.db"
     taxonomy_path: str = "config/taxonomy_fy27.yaml"
-    catalog_path: str = "config/catalog.csv"
+    catalog_path: str = "config/catalog_fy27.csv"
     model: str = "claude-sonnet-5-5"
 
 

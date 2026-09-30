@@ -1,0 +1,205 @@
+"""Catálogo de treinamentos em SQLite (consultável com SQL puro).
+
+Compartilha o arquivo ``data/skillgap.db`` com o ``Store`` de resultados; por isso
+usa WAL e timeout. Toda consulta é parametrizada: entrada de usuário nunca é
+concatenada ao SQL.
+"""
+from __future__ import annotations
+
+import csv
+import sqlite3
+import threading
+from pathlib import Path
+
+from skillgap.recommender import Course, load_catalog
+from skillgap.taxonomy import Taxonomy
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS courses (
+    id TEXT PRIMARY KEY,
+    platform TEXT NOT NULL,
+    title TEXT NOT NULL,
+    focus TEXT NOT NULL DEFAULT '',
+    level INTEGER NOT NULL CHECK(level BETWEEN 1 AND 3),
+    provider TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'curso',
+    hours INTEGER CHECK(hours IS NULL OR hours >= 0),
+    link TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    verified INTEGER NOT NULL DEFAULT 0 CHECK(verified IN (0,1))
+);
+CREATE TABLE IF NOT EXISTS course_skills (
+    course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    skill_id TEXT NOT NULL,
+    PRIMARY KEY(course_id, skill_id)
+);
+CREATE INDEX IF NOT EXISTS idx_course_skills_skill ON course_skills(skill_id);
+CREATE VIEW IF NOT EXISTS v_course_coverage AS
+  SELECT c.id, c.platform, c.title, c.level, c.provider, c.kind, c.hours, c.verified, c.link,
+         COALESCE(group_concat(cs.skill_id, ';'), '') AS skills
+  FROM courses c LEFT JOIN course_skills cs ON cs.course_id = c.id GROUP BY c.id;
+"""
+
+_SELECT = (
+    "SELECT c.id, c.platform, c.title, c.focus, c.level, c.provider, c.kind, c.hours, "
+    "c.link, c.source, c.verified, "
+    "COALESCE((SELECT group_concat(skill_id, ';') FROM course_skills WHERE course_id = c.id), '') "
+    "FROM courses c")
+
+CSV_HEADER = ["id", "plataforma", "titulo", "foco", "nivel", "provedor", "tipo",
+              "skills_cobertas", "carga_horaria", "link", "fonte", "verificado"]
+
+
+def _like_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _to_course(row) -> Course:
+    skills = tuple(sorted(s for s in row[11].split(";") if s))
+    return Course(id=row[0], platform=row[1], title=row[2], focus=row[3], level=row[4],
+                  provider=row[5], kind=row[6], hours=row[7], link=row[8], source=row[9],
+                  verified=bool(row[10]), skills=skills)
+
+
+def validate_courses(courses: list[Course], taxonomy: Taxonomy) -> None:
+    """Todas as skills devem existir na taxonomia e a plataforma ser uma trilha."""
+    valid = {s.id for track in taxonomy.tracks for s in taxonomy.skills_in_track(track)}
+    problems: list[str] = []
+    for c in courses:
+        unknown = sorted(s for s in c.skills if s not in valid)
+        if unknown:
+            problems.append(f"{c.id}: skill(s) inexistente(s) na taxonomia: {', '.join(unknown)}")
+        if c.platform and c.platform not in taxonomy.tracks:
+            problems.append(f"{c.id}: plataforma '{c.platform}' não é uma trilha da taxonomia")
+    if problems:
+        raise ValueError("Catálogo inválido:\n  " + "\n  ".join(problems))
+
+
+class CatalogStore:
+    def __init__(self, path: str):
+        if path != ":memory:":
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self._db = sqlite3.connect(path, check_same_thread=False, timeout=10)
+        self._lock = threading.Lock()
+        with self._lock:
+            self._db.execute("PRAGMA foreign_keys=ON")
+            if path != ":memory:":
+                self._db.execute("PRAGMA journal_mode=WAL")
+            self._db.executescript(SCHEMA)
+            self._db.commit()
+
+    def close(self) -> None:
+        with self._lock:
+            self._db.close()
+
+    def count(self) -> int:
+        with self._lock:
+            return self._db.execute("SELECT COUNT(*) FROM courses").fetchone()[0]
+
+    @staticmethod
+    def _insert(db: sqlite3.Connection, course: Course) -> None:
+        db.execute(
+            "INSERT INTO courses (id, platform, title, focus, level, provider, kind, hours, "
+            "link, source, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET platform=excluded.platform, title=excluded.title, "
+            "focus=excluded.focus, level=excluded.level, provider=excluded.provider, "
+            "kind=excluded.kind, hours=excluded.hours, link=excluded.link, "
+            "source=excluded.source, verified=excluded.verified",
+            (course.id, course.platform, course.title, course.focus, course.level,
+             course.provider, course.kind, course.hours, course.link, course.source,
+             int(course.verified)))
+        db.execute("DELETE FROM course_skills WHERE course_id = ?", (course.id,))
+        db.executemany("INSERT INTO course_skills (course_id, skill_id) VALUES (?, ?)",
+                       [(course.id, s) for s in dict.fromkeys(course.skills)])
+
+    def upsert(self, courses: list[Course]) -> None:
+        with self._lock, self._db:
+            for course in courses:
+                self._insert(self._db, course)
+
+    def replace_all(self, courses: list[Course]) -> None:
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM courses")
+            for course in courses:
+                self._insert(self._db, course)
+
+    def all_courses(self) -> list[Course]:
+        return self.list_courses()
+
+    def list_courses(self, platform: str | None = None, level: int | None = None,
+                     kind: str | None = None, skill: str | None = None,
+                     q: str | None = None, limit: int | None = None) -> list[Course]:
+        where: list[str] = []
+        params: list[object] = []
+        if platform is not None:
+            where.append("c.platform = ?")
+            params.append(platform)
+        if level is not None:
+            where.append("c.level = ?")
+            params.append(level)
+        if kind is not None:
+            where.append("c.kind = ?")
+            params.append(kind)
+        if skill is not None:
+            where.append("EXISTS (SELECT 1 FROM course_skills s "
+                         "WHERE s.course_id = c.id AND s.skill_id = ?)")
+            params.append(skill)
+        if q:
+            pattern = f"%{_like_escape(q)}%"
+            where.append("(c.title LIKE ? ESCAPE '\\' OR c.focus LIKE ? ESCAPE '\\' "
+                         "OR c.provider LIKE ? ESCAPE '\\')")
+            params.extend([pattern, pattern, pattern])
+        sql = _SELECT + (" WHERE " + " AND ".join(where) if where else "")
+        sql += " ORDER BY c.platform, c.level, c.id"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(int(limit))
+        with self._lock:
+            rows = self._db.execute(sql, params).fetchall()
+        return [_to_course(r) for r in rows]
+
+    def get(self, id: str) -> Course | None:
+        with self._lock:
+            row = self._db.execute(_SELECT + " WHERE c.id = ?", (id,)).fetchone()
+        return _to_course(row) if row else None
+
+    def stats(self) -> dict:
+        def grouped(column: str) -> dict[str, int]:
+            rows = self._db.execute(
+                f"SELECT {column}, COUNT(*) FROM courses GROUP BY {column} ORDER BY {column}")
+            return {str(k): n for k, n in rows}
+
+        with self._lock:
+            total, verified, unknown = self._db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(verified), 0), "
+                "COALESCE(SUM(hours IS NULL), 0) FROM courses").fetchone()
+            return {
+                "total": total,
+                "by_platform": grouped("platform"),
+                "by_level": grouped("level"),
+                "by_kind": grouped("kind"),
+                "verified": verified,
+                "unverified": total - verified,
+                "hours_unknown": unknown,
+            }
+
+    def seed_from_csv_if_empty(self, path: str | Path, taxonomy: Taxonomy) -> int:
+        if self.count() > 0:
+            return 0
+        if not Path(path).is_file():
+            raise ValueError(f"Arquivo de catálogo não encontrado: {path}")
+        courses = load_catalog(path)
+        validate_courses(courses, taxonomy)
+        self.replace_all(courses)
+        return len(courses)
+
+    def export_csv(self, path: str | Path) -> None:
+        courses = self.all_courses()
+        with open(path, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle, lineterminator="\n")
+            writer.writerow(CSV_HEADER)
+            for c in courses:
+                writer.writerow([
+                    c.id, c.platform, c.title, c.focus, c.level, c.provider, c.kind,
+                    ";".join(c.skills), "" if c.hours is None else c.hours, c.link,
+                    c.source, int(c.verified)])

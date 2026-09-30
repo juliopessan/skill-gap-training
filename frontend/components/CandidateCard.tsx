@@ -1,15 +1,13 @@
+import { CheckIcon } from "@/components/icons";
 import Flag from "@/components/Flag";
 import Ledger from "@/components/Ledger";
+import TrainingPlan from "@/components/TrainingPlan";
 import { exportUrl } from "@/lib/api";
-import { computeLedger, fmtHours } from "@/lib/ledger";
+import { computeLedger } from "@/lib/ledger";
 import type { Candidate, Track } from "@/lib/types";
 
 const LEVEL = ["—", "Básico", "Intermediário", "Avançado"];
 const SEVERITY = { high: "Alta", medium: "Média", low: "Baixa" } as const;
-
-function isHttpUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value);
-}
 
 function joinCodes(names: string[]) {
   return names.map((n, i) => (
@@ -20,16 +18,26 @@ function joinCodes(names: string[]) {
 interface Props {
   candidate: Candidate;
   tracks: Track[];
+  /** Opens the API-key dialog (offered when the LLM is unavailable). */
+  onConfigureKey?: () => void;
 }
 
-export default function CandidateCard({ candidate, tracks }: Props) {
+export default function CandidateCard({ candidate, tracks, onConfigureKey }: Props) {
   if (candidate.status === "error") {
     return (
       <section className="card">
         <h2>{candidate.candidate}</h2>
         <div className="notice">
           <span className="notice-k">Não processado</span>
-          <p>{candidate.error_message ?? "Erro desconhecido."} Corrija a causa e envie o CV de novo.</p>
+          {candidate.error === "LLM_UNAVAILABLE" ? (
+            <>
+              <p>{candidate.error_message ?? "Erro desconhecido."}</p>
+              <p>Depois de salvar a chave, envie o CV de novo.</p>
+              <button type="button" className="button" onClick={onConfigureKey}>Configurar chave da API</button>
+            </>
+          ) : (
+            <p>{candidate.error_message ?? "Erro desconhecido."} Corrija a causa e envie o CV de novo.</p>
+          )}
         </div>
       </section>
     );
@@ -65,13 +73,13 @@ export default function CandidateCard({ candidate, tracks }: Props) {
       </header>
 
       <p className="lede">
-        Os níveis são inferidos pelo modelo; cabe a você <span className="voice">confirmar</span> as
-        citações antes de agir sobre os gaps.
+        Os níveis são inferidos pelo modelo; cabe a você confirmar as citações antes de agir sobre
+        os gaps.
       </p>
 
-      <Ledger candidateId={candidate.id} figures={figures} />
+      <Ledger candidateId={candidate.id} figures={figures} rating={candidate.rating} />
 
-      {(figures.unverifiedNames.length > 0 || figures.noDataTracks.length > 0) && (
+      {(figures.unverifiedNames.length > 0 || figures.noDataTracks.length > 0 || figures.unverifiedCourses.length > 0) && (
       <div className="flags">
         <Flag label="Citação não encontrada" show={figures.unverifiedNames.length > 0}>
           O texto do CV não contém a citação de: {joinCodes(figures.unverifiedNames)}. Trate o nível
@@ -80,6 +88,10 @@ export default function CandidateCard({ candidate, tracks }: Props) {
         <Flag label="Sem dados" show={figures.noDataTracks.length > 0}>
           Nenhuma evidência nas trilhas {joinCodes(figures.noDataTracks.map(trackName))}. Não há gaps
           calculados para elas; isso não significa que a pessoa não tenha a skill.
+        </Flag>
+        <Flag label="Catálogo não verificado" show={figures.unverifiedCourses.length > 0}>
+          Estes treinamentos vêm de uma lista sem verificação de título, nível, carga horária e link:{" "}
+          {joinCodes(figures.unverifiedCourses)}. Confirme na fonte antes de indicar.
         </Flag>
       </div>
       )}
@@ -101,7 +113,7 @@ export default function CandidateCard({ candidate, tracks }: Props) {
                         <span className="skill-name">{s.name}</span>
                         <span className="skill-level">{LEVEL[s.level]} · {s.level}/3</span>
                         {s.evidence_verified === true && (
-                          <span className="skill-tag skill-tag--ok">✓ citação no CV</span>
+                          <span className="skill-tag skill-tag--ok"><CheckIcon draw size={12} strokeWidth={2} /> citação no CV</span>
                         )}
                         {s.evidence_verified === false && (
                           <span className="skill-tag skill-tag--no">citação não encontrada</span>
@@ -124,7 +136,7 @@ export default function CandidateCard({ candidate, tracks }: Props) {
                   <span className="skill-name">{o.name}</span>{" "}
                   <span className="skill-level">{LEVEL[o.level]}</span>
                   {o.evidence_verified === true && (
-                    <span className="skill-tag skill-tag--ok"> ✓ citação no CV</span>
+                    <span className="skill-tag skill-tag--ok"> <CheckIcon draw size={12} strokeWidth={2} /> citação no CV</span>
                   )}
                   {o.evidence_verified === false && (
                     <span className="skill-tag skill-tag--no"> citação não encontrada</span>
@@ -170,19 +182,7 @@ export default function CandidateCard({ candidate, tracks }: Props) {
         {candidate.recommendations.length === 0 ? (
           <p className="caption">Nenhum treinamento do catálogo cobre os gaps encontrados.</p>
         ) : (
-          <ol className="courses">
-            {candidate.recommendations.map((r) => (
-              <li key={r.course_id}>
-                <div className="course-title">{r.title}</div>
-                <div className="course-meta">{fmtHours(r.hours)} h · cobre: {r.covers.map(skillName).join(", ")}</div>
-                {isHttpUrl(r.link) && (
-                  <a className="course-link" href={r.link} target="_blank" rel="noopener noreferrer">
-                    Abrir curso →
-                  </a>
-                )}
-              </li>
-            ))}
-          </ol>
+          <TrainingPlan recommendations={candidate.recommendations} trackName={trackName} skillName={skillName} />
         )}
       </div>
     </section>

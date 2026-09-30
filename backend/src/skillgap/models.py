@@ -46,8 +46,35 @@ class Recommendation(BaseModel):
     course_id: str
     title: str
     covers: list[str]
-    hours: int
-    link: str
+    hours: int | None = None  # None = carga horária desconhecida
+    link: str = ""  # "" = sem link
+    provider: str | None = None  # None = não registrado (resultados antigos)
+    kind: str | None = None
+    verified: bool | None = None
+    level: int | None = None  # nível do curso (1-3); None = resultados antigos
+    platform: str | None = None
+
+
+class TrackRating(BaseModel):
+    track: str
+    name: str
+    adherence: float
+    adherence_supported: float
+    covered: int
+    expected: int
+    skills_rated: int
+    mean_level: float | None = None
+    level_label: str | None = None
+
+
+class Rating(BaseModel):
+    adherence: float
+    adherence_supported: float
+    covered: int
+    expected: int
+    mean_level: float | None = None
+    level_label: str | None = None
+    tracks: list[TrackRating] = []
 
 
 class CandidateResult(BaseModel):
@@ -62,3 +89,4 @@ class CandidateResult(BaseModel):
     other_skills: list[OtherSkill] = []
     gaps: list[Gap] = []
     recommendations: list[Recommendation] = []
+    rating: Rating | None = None  # None = resultados antigos

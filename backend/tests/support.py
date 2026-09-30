@@ -1,3 +1,4 @@
+from skillgap.catalog_store import CatalogStore
 from skillgap.models import ExtractedProfile, RawSkill
 from skillgap.pipeline import Deps
 from skillgap.recommender import Course
@@ -36,7 +37,16 @@ def make_store(path=":memory:"):
     return store
 
 
+def make_catalog(courses=None):
+    catalog = CatalogStore(":memory:")
+    catalog.upsert(list(COURSES if courses is None else courses))
+    OPEN_STORES.append(catalog)
+    return catalog
+
+
 def make_service(taxonomy, extractor=None):
     extractor = extractor or FakeExtractor()
-    service = CandidateService(make_store(), Deps(taxonomy, COURSES, extractor))
+    catalog = make_catalog()
+    service = CandidateService(make_store(), Deps(taxonomy, catalog.all_courses, extractor),
+                               catalog=catalog)
     return service, extractor

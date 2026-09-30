@@ -62,7 +62,7 @@ def test_shipped_catalog_references_only_taxonomy_skills():
     from skillgap.taxonomy import load_taxonomy
     taxonomy = load_taxonomy("config/taxonomy_fy27.yaml")
     valid = {s.id for t in taxonomy.tracks for s in taxonomy.skills_in_track(t)}
-    courses = load_catalog("config/catalog.csv")
+    courses = load_catalog("config/catalog_fy27.csv")
     assert len(courses) >= 10
     for c in courses:
         assert set(c.skills) <= valid, f"{c.id} referencia skill inexistente"
@@ -75,3 +75,93 @@ def test_catalog_with_utf8_bom_parses(tmp_path):
                     "c1,Curso Um,a;b,2,8,https://example.com/c1\n", encoding="utf-8-sig")
     courses = load_catalog(path)
     assert courses[0].id == "c1" and courses[0].skills == ("a", "b")
+
+
+# ---- Course estendido, horas desconhecidas e loader tolerante ----
+
+import pytest
+
+
+def test_course_positional_fields_and_new_defaults():
+    c = Course("c1", "T", ("a",), 1, None, "")
+    assert c.hours is None
+    assert (c.platform, c.focus, c.provider, c.kind, c.source, c.verified) == (
+        "", "", "", "curso", "", False)
+
+
+def test_unknown_hours_sort_last_on_ties_and_recommendation_carries_fields():
+    gaps = [gap("a", 0, 2, "high")]
+    courses = [
+        Course("n", "Sem horas", ("a",), 1, None, "", provider="P", kind="certificação", verified=True),
+        Course("k", "Com horas", ("a",), 1, 30, ""),
+    ]
+    result = recommend(gaps, courses)
+    assert [r.course_id for r in result] == ["k", "n"]
+    assert result[1].hours is None and result[1].link == ""
+    assert (result[1].provider, result[1].kind, result[1].verified) == ("P", "certificação", True)
+
+
+def write(tmp_path, text, name="c.csv"):
+    path = tmp_path / name
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_legacy_six_column_csv_still_loads(tmp_path):
+    path = write(tmp_path, "id,titulo,skills_cobertas,nivel,carga_horaria,link\n"
+                           "c1,Um,a;b,2,8,https://x/c1\n")
+    [c] = load_catalog(path)
+    assert c.hours == 8 and c.link == "https://x/c1" and c.kind == "curso" and c.verified is False
+
+
+def test_new_columns_blanks_and_nivel_names(tmp_path):
+    header = ("id,plataforma,titulo,foco,nivel,provedor,tipo,skills_cobertas,"
+              "carga_horaria,link,fonte,verificado\n")
+    rows = (
+        'a,fabric,"Titulo, com virgula",Foco,Fundamentals,Prov,curso,x.y;x.z,,,Fonte A,0\n'
+        "b,fabric,B,,INTERMEDIÁRIO,,certificação,x.y,10,https://l,,sim\n"
+        "c,fabric,C,,avançado,,curso,\"x.y, x.z\",5,,,TRUE\n"
+        "d,fabric,D,,basic,,curso,x.y,,,,não\n"
+        "e,fabric,E,,Intermediate,,curso,x.y,,,,false\n"
+        "f,fabric,F,,Advanced,,curso,x.y,,,,1\n"
+    )
+    cs = {c.id: c for c in load_catalog(write(tmp_path, header + rows))}
+    assert cs["a"].title == "Titulo, com virgula" and cs["a"].level == 1
+    assert cs["a"].hours is None and cs["a"].link == "" and cs["a"].source == "Fonte A"
+    assert cs["a"].verified is False and cs["a"].skills == ("x.y", "x.z")
+    assert cs["b"].level == 2 and cs["b"].kind == "certificação" and cs["b"].verified is True
+    assert cs["c"].level == 3 and cs["c"].skills == ("x.y", "x.z") and cs["c"].verified is True
+    assert cs["d"].level == 1 and cs["e"].level == 2 and cs["f"].level == 3
+    assert cs["d"].verified is False and cs["f"].verified is True
+
+
+@pytest.mark.parametrize("text, needle", [
+    ("id,titulo,nivel\nc1,Um,1\n", "skills_cobertas"),
+    ("id,titulo,skills_cobertas,nivel\nc1,Um,a,9\n", "nivel"),
+    ("id,titulo,skills_cobertas,nivel\nc1,Um,a,1\nc1,Dois,a,1\n", "duplicado"),
+    ("id,titulo,skills_cobertas,nivel,carga_horaria\nc1,Um,a,1,oito\n", "carga_horaria"),
+    ("id,titulo,skills_cobertas,nivel,verificado\nc1,Um,a,1,talvez\n", "verificado"),
+])
+def test_bad_rows_raise_portuguese_error_with_line(tmp_path, text, needle):
+    path = write(tmp_path, text)
+    with pytest.raises(ValueError) as exc:
+        load_catalog(path)
+    message = str(exc.value)
+    assert needle in message and "c.csv" in message
+
+
+def test_bad_row_message_names_line_number(tmp_path):
+    path = write(tmp_path, "id,titulo,skills_cobertas,nivel\nc1,Um,a,1\nc2,Dois,a,9\n")
+    with pytest.raises(ValueError, match="linha 3"):
+        load_catalog(path)
+
+
+def test_recommendation_carries_level_and_platform():
+    c = Course("p", "Curso p", ("a",), 2, 4, "", platform="Microsoft Learn")
+    [r] = recommend([gap("a", 0, 2, "high")], [c])
+    assert r.level == 2 and r.platform == "Microsoft Learn"
+
+
+def test_empty_platform_becomes_none():
+    [r] = recommend([gap("a", 0, 2, "high")], [course("q", ["a"], level=3)])
+    assert r.platform is None and r.level == 3

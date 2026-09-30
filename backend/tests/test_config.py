@@ -7,7 +7,7 @@ def test_defaults(monkeypatch):
     settings = load_settings()
     assert settings.db_path == "data/skillgap.db"
     assert settings.taxonomy_path == "config/taxonomy_fy27.yaml"
-    assert settings.catalog_path == "config/catalog.csv"
+    assert settings.catalog_path == "config/catalog_fy27.csv"
     assert settings.model == "claude-sonnet-5-5"
 
 

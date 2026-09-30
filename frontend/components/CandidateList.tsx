@@ -1,3 +1,6 @@
+"use client";
+
+import { AnimatePresence, motion } from "motion/react";
 import type { Candidate } from "@/lib/types";
 
 const STAGES: Record<string, string> = {
@@ -23,8 +26,16 @@ export default function CandidateList({ candidates, selectedId, onSelect }: Prop
         <p className="caption">Nenhum CV processado ainda.</p>
       ) : (
         <ul className="list">
+          <AnimatePresence initial={false}>
           {candidates.map((c) => (
-            <li key={c.id}>
+            <motion.li
+              key={c.id}
+              layout
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+            >
               <button
                 className={`list__item ${c.id === selectedId ? "list__item--active" : ""}`}
                 aria-current={c.id === selectedId ? "true" : undefined}
@@ -35,8 +46,9 @@ export default function CandidateList({ candidates, selectedId, onSelect }: Prop
                   {(c.status === "processing" ? STAGES[c.stage] ?? c.stage : STAGES[c.status] ?? c.status).toUpperCase()}
                 </span>
               </button>
-            </li>
+            </motion.li>
           ))}
+          </AnimatePresence>
         </ul>
       )}
     </div>

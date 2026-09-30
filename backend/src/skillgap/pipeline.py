@@ -5,6 +5,7 @@ from skillgap.classifier import build_profile
 from skillgap.evidence import verify_evidence
 from skillgap.gap_analyzer import analyze_gaps
 from skillgap.models import ExtractedProfile
+from skillgap.rating import compute_rating
 from skillgap.pdf_reader import extract_text
 from skillgap.privacy import scrub
 from skillgap.recommender import Course, recommend
@@ -14,7 +15,8 @@ from skillgap.taxonomy import Taxonomy
 @dataclass
 class Deps:
     taxonomy: Taxonomy
-    courses: list[Course]
+    # Lista fixa ou callable resolvido a cada execução (edições no banco valem no próximo CV).
+    courses: list[Course] | Callable[[], list[Course]]
     extract: Callable[[str, list[str]], ExtractedProfile]
 
 
@@ -32,9 +34,11 @@ def run_pipeline(data: bytes, deps: Deps, on_stage: Callable[[str], None] = lamb
     other_skills = [o.model_copy(update={"evidence_verified": verify_evidence(o.evidence, sent)})
                     for o in other_skills]
     gaps, no_data_tracks = analyze_gaps(skills, deps.taxonomy)
+    rating = compute_rating(skills, deps.taxonomy)
 
     on_stage("recommending")
-    recommendations = recommend(gaps, deps.courses)
+    courses = deps.courses() if callable(deps.courses) else deps.courses
+    recommendations = recommend(gaps, courses)
 
     return {
         "candidate": extracted.candidate,
@@ -43,4 +47,5 @@ def run_pipeline(data: bytes, deps: Deps, on_stage: Callable[[str], None] = lamb
         "gaps": gaps,
         "recommendations": recommendations,
         "no_data_tracks": no_data_tracks,
+        "rating": rating,
     }
