@@ -5,6 +5,11 @@
 Você sobe o mini CV de uma pessoa, e o sistema devolve as skills dela por trilha do FY27, os gaps, um
 rating e uma lista de treinamentos em ordem de nível, cada skill com a frase do CV que a sustenta.
 
+![Tela inicial do Skill Gap Training: o título "Todo gap de skill é um julgamento. Dê a ele evidência.", os três passos Extrai, Confere e Recomenda, e o diagrama "Uma passada completa" com o passo Skills tracejado por ser inferido pelo modelo](docs/images/hero.png)
+
+<sub>Tela inicial da interface (build de produção, tema claro). Linha cheia no diagrama: calculado por
+código; tracejada: inferido pelo modelo.</sub>
+
 > **Status:** os 416 testes automáticos do backend passam, e uma execução manual com o Claude real
 > funcionou de ponta a ponta durante o desenvolvimento (18 citações do modelo, 16 localizadas no CV).
 > Nenhum teste automático chama a API real, e a qualidade da extração ainda não foi avaliada em escala.
