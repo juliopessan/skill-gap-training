@@ -23,10 +23,18 @@ o vínculo com as skills da taxonomia FY27 é regra nossa e aparece como tal.
   `levels` (beginner|intermediate|advanced), `products`, `roles`, `duration_in_minutes` (learning paths) ou
   `duration_in_hours` (cursos), `url`, `last_modified`; certificações têm `exams` e não têm `products`;
   exames têm `products` e `study_guide`.
+- **Teste ao vivo (2026-09-30):** handshake do MCP completo funcionou (`initialize` devolve `Mcp-Session-Id`,
+  `notifications/initialized`, `tools/list` com as 3 ferramentas, `tools/call` com resultado em SSE). Uma busca
+  devolveu 10 resultados `{title, content, contentUrl}`, todos em `learn.microsoft.com`. O texto de cada
+  resultado é markdown e menciona "Level: Intermediate", mas isso é texto de página: o nível oficial vem do
+  catálogo, o MCP não é fonte de nível.
+- Com o filtro de produtos: 68 learning paths (24 beginner, 40 intermediate, 4 advanced) e 10 cursos (2, 5, 3),
+  todos com duração. Certificações relevantes existem (Fabric Data/Analytics Engineer, Azure AI Engineer,
+  Azure AI Fundamentals, Databricks Data Engineer Associate, Multi-Agent AI Solutions Expert), mas quase todas
+  sem exames ligados no catálogo.
 - Produtos relevantes vistos: `microsoft-foundry`, `foundry-agent-service`, `foundry-tools`, `azure-openai`,
   `fabric`, `azure-databricks`, `ai-builder`. 65 learning paths casam com Foundry/Fabric/Databricks.
-- A listagem `tools/list` do MCP exige sessão; o cliente deve executar `initialize` e enviar
-  `notifications/initialized` antes (a verificar na implementação com teste ao vivo opcional).
+- `tools/list` e `tools/call` exigem o cabeçalho `Mcp-Session-Id` devolvido pelo `initialize`.
 
 ## Componentes
 
@@ -37,8 +45,11 @@ o vínculo com as skills da taxonomia FY27 é regra nossa e aparece como tal.
 - **Nível:** beginner→1, intermediate→2, advanced→3. Vários níveis: vale o menor; a lista completa fica em
   `raw_levels`.
 - **Duração:** minutos→horas (arredondadas para cima) só quando informada; senão `None`. Nunca estimada.
-- **Certificação:** herda produtos dos exames ligados (`exams[].uid` → exame → `products`); os códigos dos
-  exames ficam em `exam_codes`.
+- **Certificação:** o catálogo devolve `exams: []` para a maioria das certificações relevantes (Fabric Data
+  Engineer, Fabric Analytics Engineer, Azure AI Engineer, Databricks Data Engineer…) e o produto dos exames
+  que existem costuma ser só `azure`. Por isso a certificação **não depende de produto herdado**: é casada por
+  título e resumo, pelas regras do YAML. Quando há exames ligados, os códigos ficam em `exam_codes`; quando
+  não há, o campo fica vazio (nunca inferido).
 - Filtro por produtos permitidos (lista em `learn_mapping.yaml`).
 - Link sem `WT.mc_id` e demais parâmetros de rastreio.
 - Ids `learn:<uid>`; `verified=1`; `source="Microsoft Learn Catalog API"`; `synced_at`.
@@ -52,7 +63,7 @@ o vínculo com as skills da taxonomia FY27 é regra nossa e aparece como tal.
 - Por skill da taxonomia: `products` (qualquer) e `keywords` (título/resumo, sem acento e sem caixa, com
   fronteira de palavra).
 - Um item recebe todas as skills cujas regras casam (produto **e** palavra-chave, ou só palavra-chave forte
-  quando marcada `strong`).
+  quando marcada `strong`). Certificações usam só título/resumo (`strong`), pois não têm produto confiável.
 - Relatório em saída padrão e `--report arquivo.md`: casados por skill, itens descartados, **skills sem
   nenhum item**.
 - Vínculo gravado em `course_skills` com `origin="rule"`.
@@ -102,7 +113,7 @@ o vínculo com as skills da taxonomia FY27 é regra nossa e aparece como tal.
 
 - Fixture reduzida do catálogo (cursos, paths, certificação com exames, item fora dos produtos, item sem
   duração, vários níveis).
-- Normalização de nível/duração; certificação herdando produto; remoção de parâmetros de rastreio.
+- Normalização de nível/duração; certificação casada por título mesmo com `exams: []`; remoção de parâmetros de rastreio.
 - Sync idempotente; não toca linhas manuais; item removido vira `retired`; falha no meio não deixa estado
   parcial.
 - Regras: casamento por produto+palavra, fronteira de palavra, sem acento, relatório de skills sem item.
